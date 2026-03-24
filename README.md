@@ -23,7 +23,7 @@
 
 [<img src="https://flagcdn.com/24x18/gb.png" alt="English"> English](#overview) &nbsp;&nbsp;
 [<img src="https://flagcdn.com/24x18/es.png" alt="Español"> Español](#-seccion-en-espanol) &nbsp;&nbsp;
-[<img src="https://flagcdn.com/24x18/ad.png" alt="Català"> Català](#-seccio-en-catala)
+[<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Flag_of_Catalonia.svg/24px-Flag_of_Catalonia.svg.png" alt="Català"> Català](#-seccio-en-catala)
 
 </div>
 
@@ -262,7 +262,7 @@ python -m cleanacelerai.run
 
 ---
 
-## <img src="https://flagcdn.com/24x18/ad.png" alt="CA"> Seccio en Catala
+## <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Flag_of_Catalonia.svg/24px-Flag_of_Catalonia.svg.png" alt="CA"> Seccio en Catala
 
 ### Assessor de Caos Intel-ligent
 
