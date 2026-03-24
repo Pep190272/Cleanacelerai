@@ -19,10 +19,11 @@
 
 ---
 
-**Language / Idioma**
+**Language / Idioma / Llengua**
 
-[![English](https://img.shields.io/badge/English-Read-blue?style=flat-square&logo=googletranslate&logoColor=white)](#-features)
-[![Español](https://img.shields.io/badge/Espa%C3%B1ol-Leer-red?style=flat-square&logo=googletranslate&logoColor=white)](#-caractersticas)
+[<img src="https://flagcdn.com/24x18/gb.png" alt="English"> English](#overview) &nbsp;&nbsp;
+[<img src="https://flagcdn.com/24x18/es.png" alt="Español"> Español](#-seccion-en-espanol) &nbsp;&nbsp;
+[<img src="https://flagcdn.com/24x18/ad.png" alt="Català"> Català](#-seccio-en-catala)
 
 </div>
 
@@ -225,9 +226,7 @@ Deep categorization cache is stored in `%USERPROFILE%\.cleanacelerai\deep_cache.
 
 ---
 
-## Caractersticas
-
-> Seccion en espanol
+## <img src="https://flagcdn.com/24x18/es.png" alt="ES"> Seccion en Espanol
 
 ### Asesor de Caos Inteligente
 
@@ -251,6 +250,42 @@ El Asesor de IA tiene tres pestanas especializadas:
 | **Organizacion en carpetas** | Reconstruye la barra de marcadores con carpetas por categoria directamente en el archivo del navegador |
 
 ### Inicio Rapido
+
+```bash
+git clone https://github.com/Pep190272/Cleanacelerai.git
+cd Cleanacelerai
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+python -m cleanacelerai.run
+```
+
+---
+
+## <img src="https://flagcdn.com/24x18/ad.png" alt="CA"> Seccio en Catala
+
+### Assessor de Caos Intel-ligent
+
+L'Assessor d'IA te tres pestanyes especialitzades:
+
+| Pestanya | Descripcio |
+|----------|------------|
+| **Ordre General** | Analitza qualsevol carpeta i classifica arxius per tipus, nivell de risc i accio suggerida |
+| **Documents PDF** | Extreu text de PDFs amb PyMuPDF i els classifica en 10 categories: factures, llibres, tutorials, contractes, informes, i mes |
+| **Neteja Profunda** | Escaneja dotfiles i carpetes del sistema amb una base de coneixement de 45+ carpetes conegudes. Mostra nivell de risc, descripcio i recomanacions clares |
+
+### Gestor de Marcadors del Navegador
+
+| Funcio | Descripcio |
+|--------|------------|
+| **Auto-deteccio** | Troba Chrome, Edge i Brave amb noms de perfil i emails |
+| **Categoritzacio en 4 nivells** | Regles de domini, keywords de contingut, analisi d'estructura d'URL, i cerca a pagines web |
+| **12 categories** | Productivitat, Desenvolupament, IA, Eines, Entreteniment, Xarxes Socials, i mes |
+| **Neteja de noms** | Elimina brossa com "- YouTube", "| Medium", prefixos de chatbots. Maxim 40 caracters |
+| **Deteccio d'enllacos morts** | Marca URLs 404/inaccessibles per a neteja |
+| **Organitzacio en carpetes** | Reconstrueix la barra de marcadors amb carpetes per categoria directament a l'arxiu del navegador |
+
+### Inici Rapid
 
 ```bash
 git clone https://github.com/Pep190272/Cleanacelerai.git
