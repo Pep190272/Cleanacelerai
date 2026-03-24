@@ -21,9 +21,9 @@
 
 **Language / Idioma / Llengua**
 
-[<img src="https://flagcdn.com/24x18/gb.png" alt="English"> English](#overview) &nbsp;&nbsp;
-[<img src="https://flagcdn.com/24x18/es.png" alt="Español"> Español](#-seccion-en-espanol) &nbsp;&nbsp;
-[<img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Flag_of_Catalonia.svg/24px-Flag_of_Catalonia.svg.png" alt="Català"> Català](#-seccio-en-catala)
+[<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/gb.svg" width="24" alt="English"> English](#overview) &nbsp;&nbsp;
+[<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/es.svg" width="24" alt="Español"> Español](#-seccion-en-espanol) &nbsp;&nbsp;
+[<img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/es-ct.svg" width="24" alt="Català"> Català](#-seccio-en-catala)
 
 </div>
 
@@ -226,7 +226,7 @@ Deep categorization cache is stored in `%USERPROFILE%\.cleanacelerai\deep_cache.
 
 ---
 
-## <img src="https://flagcdn.com/24x18/es.png" alt="ES"> Seccion en Espanol
+## <img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/es.svg" width="24" alt="ES"> Seccion en Espanol
 
 ### Asesor de Caos Inteligente
 
@@ -262,7 +262,7 @@ python -m cleanacelerai.run
 
 ---
 
-## <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Flag_of_Catalonia.svg/24px-Flag_of_Catalonia.svg.png" alt="CA"> Seccio en Catala
+## <img src="https://raw.githubusercontent.com/lipis/flag-icons/main/flags/4x3/es-ct.svg" width="24" alt="CA"> Seccio en Catala
 
 ### Assessor de Caos Intel-ligent
 
