@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtual environment
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Coverage
+.coverage
+htmlcov/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Legacy monolith
+cleanacelerai.py
+
+# PyInstaller
+*.exe
