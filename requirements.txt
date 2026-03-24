@@ -1,0 +1,5 @@
+# Cleanacelerai - Requirements
+# Instalar con: pip install -r requirements.txt
+
+customtkinter>=5.0.0
+PyMuPDF>=1.23.0
