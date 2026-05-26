@@ -36,7 +36,9 @@ class TestEvaluateFileRisk:
 
     # ── Dotfiles ───────────────────────────────────────────────────────────
     def test_vscode_is_dotfile(self) -> None:
-        assert evaluate_file_risk(r"C:\Users\Josep\.vscode\settings.json") == RiskLevel.DOTFILE
+        # settings.json is a code file → now returns CRITICAL (Patch 2)
+        # Use a non-code extension to test the dotfile path logic
+        assert evaluate_file_risk(r"C:\Users\Josep\.vscode\settings.bin") == RiskLevel.DOTFILE
 
     def test_ssh_is_dotfile(self) -> None:
         assert evaluate_file_risk(r"C:\Users\Josep\.ssh\id_rsa") == RiskLevel.DOTFILE
@@ -49,8 +51,10 @@ class TestEvaluateFileRisk:
 
     # ── User keyword protection ────────────────────────────────────────────
     def test_custom_keyword_protection(self) -> None:
+        # .py files now return CRITICAL (Patch 2). Use a non-code extension
+        # to isolate keyword-protection logic.
         result = evaluate_file_risk(
-            r"C:\Users\Josep\myproject\src\main.py",
+            r"C:\Users\Josep\myproject\src\data.bin",
             protected_keywords=["myproject"],
         )
         assert result == RiskLevel.PROTECTED
@@ -64,8 +68,10 @@ class TestEvaluateFileRisk:
 
     # ── Folder protection ──────────────────────────────────────────────────
     def test_protected_folder(self) -> None:
+        # .py files now return CRITICAL (Patch 2). Use a non-code extension
+        # to isolate protected-folder logic.
         result = evaluate_file_risk(
-            r"C:\Users\Josep\Mis_Proyectos\app\main.py",
+            r"C:\Users\Josep\Mis_Proyectos\app\build.zip",
             protected_folders=[r"C:\Users\Josep\Mis_Proyectos"],
         )
         assert result == RiskLevel.PROJECT
@@ -86,8 +92,10 @@ class TestEvaluateFileRisk:
         assert result == RiskLevel.SAFE
 
     def test_empty_keywords_and_folders(self) -> None:
+        # .py files now return CRITICAL (Patch 2). Use a non-code extension
+        # to test the "nothing special → SAFE" base case.
         result = evaluate_file_risk(
-            r"D:\Work\project\app.py",
+            r"D:\Work\project\data.bin",
             protected_keywords=[],
             protected_folders=[],
         )
@@ -117,6 +125,52 @@ class TestFormatRiskLabel:
     def test_personal_label(self) -> None:
         label = format_risk_label(RiskLevel.PERSONAL)
         assert "PERSONAL" in label
+
+
+class TestCodeExtensionProtection:
+    """Patch 2: web/code extensions must ALWAYS return CRITICAL tier."""
+
+    @pytest.mark.parametrize("ext", [
+        ".php", ".css", ".html", ".htm", ".js", ".mjs", ".ts", ".tsx", ".jsx",
+        ".py", ".rb", ".go", ".rs", ".java", ".kt", ".swift", ".c", ".h", ".cpp",
+        ".json", ".yaml", ".yml", ".toml", ".xml", ".md", ".mdx", ".sql",
+        ".sh", ".bash", ".ps1", ".bat", ".cmd",
+    ])
+    def test_code_extension_is_critical(self, ext: str) -> None:
+        result = evaluate_file_risk(rf"D:\SomeFolder\file{ext}")
+        assert result == RiskLevel.CRITICAL, (
+            f"Extension {ext!r} should return CRITICAL but got {result}"
+        )
+
+    def test_php_file_in_downloads_is_critical_not_personal(self) -> None:
+        """PERSONAL tier must NOT win over CRITICAL for code extensions."""
+        result = evaluate_file_risk(r"C:\Users\Josep\Downloads\style.css")
+        assert result == RiskLevel.CRITICAL
+
+    def test_py_file_with_no_special_path_is_critical(self) -> None:
+        result = evaluate_file_risk(r"D:\random\script.py")
+        assert result == RiskLevel.CRITICAL
+
+    def test_ts_file_is_critical(self) -> None:
+        result = evaluate_file_risk(r"D:\projects\src\app.ts")
+        assert result == RiskLevel.CRITICAL
+
+    def test_jpg_is_still_safe(self) -> None:
+        """Image files should NOT be blocked by the code extension guard."""
+        result = evaluate_file_risk(r"D:\Photos\vacation.jpg")
+        assert result == RiskLevel.SAFE
+
+    def test_zip_is_still_safe(self) -> None:
+        result = evaluate_file_risk(r"D:\Archive\backup.zip")
+        assert result == RiskLevel.SAFE
+
+    def test_env_file_is_critical(self) -> None:
+        result = evaluate_file_risk(r"D:\project\.env")
+        assert result == RiskLevel.CRITICAL
+
+    def test_gitignore_is_critical(self) -> None:
+        result = evaluate_file_risk(r"D:\project\.gitignore")
+        assert result == RiskLevel.CRITICAL
 
 
 class TestGetRiskTag:

@@ -33,10 +33,33 @@ EXTENSIONES_SISTEMA: tuple[str, ...] = (
     '.db', '.tlb', '.cpl', '.msc', '.msi', '.cab',
 )
 
+# Web and code files — NEVER deletable, always max protection tier
+EXTENSIONES_CODIGO_PROTEGIDAS: tuple[str, ...] = (
+    '.php', '.css', '.html', '.htm', '.js', '.mjs', '.ts', '.tsx', '.jsx',
+    '.py', '.rb', '.go', '.rs', '.java', '.kt', '.swift', '.c', '.h', '.cpp',
+    '.json', '.yaml', '.yml', '.toml', '.xml', '.md', '.mdx', '.sql',
+    '.env', '.env.example', '.gitignore', '.gitattributes',
+    '.lock', '.txt', '.cfg', '.conf',
+    '.sh', '.bash', '.ps1', '.bat', '.cmd',
+)
+
 ARCHIVOS_PROHIBIDOS: set[str] = {
     'ntuser.dat', 'desktop.ini', 'thumbs.db',
     'pagefile.sys', 'hiberfil.sys', 'swapfile.sys', 'dumpstack.log',
 }
+
+# Folders that must never be scanned for deletion — contain project/dev code
+PATHS_BLOQUEADOS_SCAN: tuple[str, ...] = (
+    '\\Local Sites\\',
+    '\\Mis_proyectos\\',
+    '\\AppData\\Roaming\\Local\\',
+    '\\.git\\',
+    '\\node_modules\\',
+    '\\venv\\',
+    '\\.venv\\',
+    '\\dist\\',
+    '\\build\\',
+)
 
 # --- Intelligent Chaos Advisor ---
 from pathlib import Path

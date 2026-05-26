@@ -109,3 +109,58 @@ class TestFindDuplicates:
         messages: list[str] = []
         find_duplicates([str(tmp_path)], on_progress=messages.append)
         assert len(messages) > 0
+
+
+class TestBlocklistedPathsSkipped:
+    """Patch 4: paths matching PATHS_BLOQUEADOS_SCAN are skipped during walk."""
+
+    def test_node_modules_subfolder_is_skipped(self, tmp_path: Path) -> None:
+        """Files inside node_modules must not appear in duplicate results."""
+        import os as _os
+        node_mod = tmp_path / "node_modules" / "react"
+        node_mod.mkdir(parents=True)
+        content = b"duplicate content" * 100
+
+        (tmp_path / "file.bin").write_bytes(content)
+        (node_mod / "file.bin").write_bytes(content)
+
+        # Use os.sep to match normalised paths on any OS
+        blocked = (_os.sep + "node_modules" + _os.sep,)
+        with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", blocked):
+            with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+                groups = find_duplicates([str(tmp_path)])
+
+        # node_modules copy was skipped → only 1 file remains → no group
+        assert groups == []
+
+    def test_venv_subfolder_is_skipped(self, tmp_path: Path) -> None:
+        import os as _os
+        venv_dir = tmp_path / "venv" / "Lib"
+        venv_dir.mkdir(parents=True)
+        content = b"venv content data" * 100
+
+        (tmp_path / "original.bin").write_bytes(content)
+        (venv_dir / "copy.bin").write_bytes(content)
+
+        blocked = (_os.sep + "venv" + _os.sep,)
+        with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", blocked):
+            with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+                groups = find_duplicates([str(tmp_path)])
+
+        assert groups == []
+
+    def test_unblocked_subfolder_still_scanned(self, tmp_path: Path) -> None:
+        """Non-blocked subfolders must still be included in the scan."""
+        subdir = tmp_path / "photos"
+        subdir.mkdir()
+        content = b"photo data duplicated" * 100
+
+        (tmp_path / "photo.bin").write_bytes(content)
+        (subdir / "photo_copy.bin").write_bytes(content)
+
+        blocked = (r"\node_modules\\",)  # Doesn't match 'photos'
+        with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", blocked):
+            with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+                groups = find_duplicates([str(tmp_path)])
+
+        assert len(groups) == 1
