@@ -141,11 +141,25 @@ class DuplicatesView(ctk.CTkFrame):
                                  font=("Segoe UI", 9, "bold"), foreground=COLOR_TEXT_MAIN)
         self._tree.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 10))
 
+        marco_consola = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        marco_consola.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 15))
+        marco_consola.grid_columnconfigure(0, weight=1)
+
         self._consola = tk.Text(
-            tarjeta, height=2, font=("Consolas", 9),
-            bg=COLOR_BG, fg=COLOR_TEXT_MUTED, borderwidth=0,
+            marco_consola,
+            height=7,
+            font=("Consolas", 9),
+            bg=COLOR_BG, fg=COLOR_TEXT_MUTED,
+            borderwidth=0,
+            wrap="word",
         )
-        self._consola.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 15))
+        self._consola.grid(row=0, column=0, sticky="ew")
+
+        scroll_consola = ttk.Scrollbar(
+            marco_consola, orient="vertical", command=self._consola.yview,
+        )
+        scroll_consola.grid(row=0, column=1, sticky="ns")
+        self._consola.configure(yscrollcommand=scroll_consola.set)
 
     def _build_context_menu(self) -> None:
         self._menu_ctx = Menu(self, tearoff=0, bg=COLOR_CARD, fg=COLOR_TEXT_MAIN)

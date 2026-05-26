@@ -28,8 +28,9 @@ class DuplicatesPresenter:
         """
         Return True if the given path matches any entry in PATHS_BLOQUEADOS_SCAN.
 
-        Normalizes separators before comparing so forward-slash and
-        backslash paths are both handled correctly.
+        Normalizes separators and appends a trailing separator before comparing,
+        so blocklist entries like '\\Mis_proyectos\\' also match a path that is
+        exactly the blocked folder (e.g. 'D:\\Mis_proyectos').
 
         Args:
             path: Folder path chosen by the user.
@@ -38,7 +39,7 @@ class DuplicatesPresenter:
             True if the path must be refused.
         """
         import os
-        path_norm = os.path.normpath(path).lower()
+        path_norm = os.path.normpath(path).lower() + os.sep
         return any(blocked.lower() in path_norm for blocked in PATHS_BLOQUEADOS_SCAN)
 
     def set_protection(
@@ -112,6 +113,13 @@ class DuplicatesPresenter:
 
             self.view.add_duplicate_group(group, evaluaciones)
             grupos_count += 1
+
+        if grupos_count == 0:
+            self.view.log(
+                "No se encontraron duplicados eliminables. "
+                "Si esperabas resultados, revisa que la carpeta no contenga código de proyecto "
+                "(estarían protegidos) y que tenga archivos > 1 KB."
+            )
 
         self.view.on_scan_finished(grupos_count)
 

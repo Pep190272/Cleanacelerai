@@ -83,3 +83,22 @@ class TestPresenterIsPathBlocked:
     def test_dist_folder_is_blocked(self) -> None:
         p = make_presenter()
         assert p.is_path_blocked(r"D:\projects\app\dist\index.js")
+
+    # ── Regression: parent folder picked exactly, no trailing separator ──
+    def test_mis_proyectos_parent_exact_is_blocked(self) -> None:
+        """User can pick D:\\Mis_proyectos itself — must still be refused."""
+        p = make_presenter()
+        assert p.is_path_blocked(r"D:\Mis_proyectos")
+
+    def test_local_sites_parent_exact_is_blocked(self) -> None:
+        """User can pick C:\\Users\\Josep\\Local Sites itself — must still be refused."""
+        p = make_presenter()
+        assert p.is_path_blocked(r"C:\Users\Josep\Local Sites")
+
+    def test_mis_proyectos_with_trailing_sep_is_blocked(self) -> None:
+        p = make_presenter()
+        assert p.is_path_blocked("D:\\Mis_proyectos\\")
+
+    def test_venv_parent_exact_is_blocked(self) -> None:
+        p = make_presenter()
+        assert p.is_path_blocked(r"D:\projects\myapp\venv")

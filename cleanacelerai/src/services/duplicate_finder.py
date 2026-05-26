@@ -86,8 +86,10 @@ def find_duplicates(
             if CARPETAS_SISTEMA.intersection(normalizar_ruta(root)):
                 continue
 
-            # Skip globally blocked paths (dev/project folders)
-            root_norm = os.path.normpath(root).lower()
+            # Skip globally blocked paths (dev/project folders).
+            # Trailing sep makes blocklist entries like '\Mis_proyectos\' also
+            # match a root that is exactly the blocked folder ('D:\Mis_proyectos').
+            root_norm = os.path.normpath(root).lower() + os.sep
             if any(blocked.lower() in root_norm for blocked in PATHS_BLOQUEADOS_SCAN):
                 dirs.clear()
                 continue
