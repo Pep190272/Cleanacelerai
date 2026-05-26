@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 import pytest
 
+from src.domain.constants import EXTENSIONES_ASSETS_BINARIOS
 from src.services.duplicate_finder import _hash_file, find_duplicates
 
 
@@ -44,7 +45,8 @@ class TestFindDuplicates:
         (tmp_path / "unique.bin").write_bytes(b"different" * 200)
 
         with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
-            groups = find_duplicates([str(tmp_path)])
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates([str(tmp_path)])
 
         assert len(groups) == 1
         assert len(groups[0].files) == 2
@@ -82,7 +84,8 @@ class TestFindDuplicates:
         (tmp_path / "copy3.bin").write_bytes(content)
 
         with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
-            groups = find_duplicates([str(tmp_path)])
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates([str(tmp_path)])
         assert len(groups) == 1
         assert len(groups[0].files) == 3
 
@@ -162,5 +165,132 @@ class TestBlocklistedPathsSkipped:
         with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", blocked):
             with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
                 groups = find_duplicates([str(tmp_path)])
+
+        assert len(groups) == 1
+
+
+class TestFindDuplicatesBackwardCompat:
+    """Verify that the new kwargs do not break existing behavior when omitted."""
+
+    def test_default_args_no_extension_filter(self, tmp_path: Path) -> None:
+        """Call without new kwargs: .py file > 1 KB is included (no extension filter)."""
+        content = b"python source" * 200  # > 1 KB
+        (tmp_path / "script1.py").write_bytes(content)
+        (tmp_path / "script2.py").write_bytes(content)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates([str(tmp_path)])
+
+        # allowed_extensions=None means no filter → .py files are candidates
+        assert len(groups) == 1
+        assert len(groups[0].files) == 2
+
+    def test_default_size_floor_is_1024_skips_at_boundary(self, tmp_path: Path) -> None:
+        """A file of exactly 1024 bytes must be skipped (size > 1024 is the gate)."""
+        content_1024 = b"x" * 1024
+        content_1025 = b"x" * 1025
+        (tmp_path / "small1.bin").write_bytes(content_1024)
+        (tmp_path / "small2.bin").write_bytes(content_1024)
+        (tmp_path / "larger1.bin").write_bytes(content_1025)
+        (tmp_path / "larger2.bin").write_bytes(content_1025)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates([str(tmp_path)])
+
+        # Only the 1025-byte pair should form a group
+        assert len(groups) == 1
+        assert all("larger" in f.path for f in groups[0].files)
+
+
+class TestFindDuplicatesBinaryMode:
+    """Verify behavior of the new blocked_paths, allowed_extensions, min_size_bytes kwargs."""
+
+    def test_py_file_skipped_with_whitelist(self, tmp_path: Path) -> None:
+        """A .py file is NOT returned when allowed_extensions=EXTENSIONES_ASSETS_BINARIOS."""
+        content = b"python source file" * 200
+        (tmp_path / "script1.py").write_bytes(content)
+        (tmp_path / "script2.py").write_bytes(content)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates(
+                    [str(tmp_path)],
+                    allowed_extensions=EXTENSIONES_ASSETS_BINARIOS,
+                )
+
+        assert groups == []
+
+    def test_30kb_png_skipped_with_size_floor(self, tmp_path: Path) -> None:
+        """A 30 KB .png is skipped when min_size_bytes=51200 (30720 <= 51200)."""
+        content = b"x" * 30_720  # 30 KB
+        (tmp_path / "img1.png").write_bytes(content)
+        (tmp_path / "img2.png").write_bytes(content)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates(
+                    [str(tmp_path)],
+                    allowed_extensions=EXTENSIONES_ASSETS_BINARIOS,
+                    min_size_bytes=51_200,
+                )
+
+        assert groups == []
+
+    def test_100kb_png_included_with_size_floor(self, tmp_path: Path) -> None:
+        """A 100 KB .png IS returned when min_size_bytes=51200 (102400 > 51200)."""
+        content = b"y" * 102_400  # 100 KB
+        (tmp_path / "big1.png").write_bytes(content)
+        (tmp_path / "big2.png").write_bytes(content)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates(
+                    [str(tmp_path)],
+                    allowed_extensions=EXTENSIONES_ASSETS_BINARIOS,
+                    min_size_bytes=51_200,
+                )
+
+        assert len(groups) == 1
+        assert len(groups[0].files) == 2
+
+    def test_blocked_paths_override(self, tmp_path: Path) -> None:
+        """blocked_paths kwarg overrides the default blocklist for that call."""
+        safe_dir = tmp_path / "safe"
+        blocked_dir = tmp_path / "node_modules"
+        safe_dir.mkdir()
+        blocked_dir.mkdir()
+
+        content = b"z" * 2000
+        (tmp_path / "orig.bin").write_bytes(content)
+        (safe_dir / "copy_safe.bin").write_bytes(content)
+        (blocked_dir / "copy_blocked.bin").write_bytes(content)
+
+        import os as _os
+        custom_blocked = (_os.sep + "node_modules" + _os.sep,)
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            groups = find_duplicates(
+                [str(tmp_path)],
+                blocked_paths=custom_blocked,
+            )
+
+        # blocked_dir copy is skipped; orig + safe_dir copy remain → 1 group of 2
+        assert len(groups) == 1
+        assert len(groups[0].files) == 2
+        assert all("node_modules" not in f.path for f in groups[0].files)
+
+    def test_no_extension_filter_when_none(self, tmp_path: Path) -> None:
+        """allowed_extensions=None (default) does not filter by extension."""
+        content = b"mix" * 500
+        (tmp_path / "file1.bin").write_bytes(content)
+        (tmp_path / "file2.bin").write_bytes(content)
+
+        with patch("src.services.duplicate_finder.CARPETAS_SISTEMA", set()):
+            with patch("src.services.duplicate_finder.PATHS_BLOQUEADOS_SCAN", ()):
+                groups = find_duplicates(
+                    [str(tmp_path)],
+                    allowed_extensions=None,
+                )
 
         assert len(groups) == 1
