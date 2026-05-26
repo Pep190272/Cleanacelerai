@@ -131,3 +131,48 @@ class TestConfigServiceSave:
             result = service.load({})
 
         assert result["keywords"] == ["new"]
+
+
+class TestBinaryModeConfigKey:
+    """Verify binary_assets_mode_enabled key round-trips correctly."""
+
+    def test_binary_mode_persists_across_save_load(self, tmp_path: Path) -> None:
+        """Save True, reload — must return True."""
+        config_dir = tmp_path / ".cleanacelerai"
+        config_file = config_dir / "config.json"
+        payload = {"keywords": [], "folders": [], "binary_assets_mode_enabled": True}
+
+        service = ConfigService()
+        with (
+            patch("src.infrastructure.config_service.CONFIG_DIR", config_dir),
+            patch("src.infrastructure.config_service.CONFIG_FILE", config_file),
+        ):
+            service.save(payload)
+            result = service.load({"keywords": [], "folders": [], "binary_assets_mode_enabled": False})
+
+        assert result["binary_assets_mode_enabled"] is True
+
+    def test_binary_mode_defaults_to_false_on_fresh_install(self, tmp_path: Path) -> None:
+        """No config file: defaults must supply binary_assets_mode_enabled=False."""
+        config_file = tmp_path / "nonexistent.json"
+        defaults = {"keywords": [], "folders": [], "binary_assets_mode_enabled": False}
+
+        service = ConfigService()
+        with patch("src.infrastructure.config_service.CONFIG_FILE", config_file):
+            result = service.load(defaults)
+
+        assert result["binary_assets_mode_enabled"] is False
+
+    def test_binary_mode_defaults_to_false_on_old_config(self, tmp_path: Path) -> None:
+        """Old config without the key: defaults merge supplies False."""
+        config_file = tmp_path / "old_config.json"
+        # Old config has no binary_assets_mode_enabled key
+        config_file.write_text(json.dumps({"keywords": [".git"], "folders": []}), encoding="utf-8")
+        defaults = {"keywords": [], "folders": [], "binary_assets_mode_enabled": False}
+
+        service = ConfigService()
+        with patch("src.infrastructure.config_service.CONFIG_FILE", config_file):
+            result = service.load(defaults)
+
+        assert result["binary_assets_mode_enabled"] is False
+        assert result["keywords"] == [".git"]  # existing keys preserved
