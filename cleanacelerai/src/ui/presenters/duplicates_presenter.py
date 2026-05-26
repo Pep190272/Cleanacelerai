@@ -5,9 +5,15 @@ import datetime
 import threading
 from typing import TYPE_CHECKING, Callable
 
-from ...domain.constants import PATHS_BLOQUEADOS_SCAN
+from ...domain.constants import (
+    BINARY_MODE_SIZE_FLOOR_BYTES,
+    EXTENSIONES_ASSETS_BINARIOS,
+    PATHS_BLOQUEADOS_SCAN,
+    PATHS_BLOQUEADOS_SCAN_TECH,
+)
 from ...domain.models import DuplicateGroup, RiskLevel
 from ...domain.risk_evaluator import evaluate_file_risk, format_risk_label, get_risk_tag
+from ...infrastructure.config_service import ConfigService
 from ...infrastructure.file_system import open_in_explorer, safe_delete
 from ...services.duplicate_finder import find_duplicates
 
@@ -18,15 +24,26 @@ if TYPE_CHECKING:
 class DuplicatesPresenter:
     """Mediates between DuplicatesView and the duplicate-finder service."""
 
-    def __init__(self, view: "DuplicatesView") -> None:
+    def __init__(
+        self,
+        view: "DuplicatesView",
+        config_service: ConfigService | None = None,
+        initial_binary_mode: bool = False,
+    ) -> None:
         self.view = view
+        self._config_service = config_service
         self._scanning = False
         self._protected_keywords: list[str] = []
         self._protected_folders: list[str] = []
+        self._binary_mode: bool = initial_binary_mode
 
     def is_path_blocked(self, path: str) -> bool:
         """
-        Return True if the given path matches any entry in PATHS_BLOQUEADOS_SCAN.
+        Return True if the given path matches any entry in the effective blocklist.
+
+        In normal mode (binary_mode=False): checks against PATHS_BLOQUEADOS_SCAN
+        (full union). In binary mode: checks against PATHS_BLOQUEADOS_SCAN_TECH
+        only, so project paths like \\Mis_proyectos\\ and \\Local Sites\\ are allowed.
 
         Normalizes separators and appends a trailing separator before comparing,
         so blocklist entries like '\\Mis_proyectos\\' also match a path that is
@@ -40,7 +57,32 @@ class DuplicatesPresenter:
         """
         import os
         path_norm = os.path.normpath(path).lower() + os.sep
-        return any(blocked.lower() in path_norm for blocked in PATHS_BLOQUEADOS_SCAN)
+        blocklist = (
+            PATHS_BLOQUEADOS_SCAN_TECH
+            if self._binary_mode
+            else PATHS_BLOQUEADOS_SCAN
+        )
+        return any(blocked.lower() in path_norm for blocked in blocklist)
+
+    def set_binary_mode(self, enabled: bool) -> None:
+        """Update binary mode flag and persist to config. Surfaces save errors via the view."""
+        self._binary_mode = enabled
+        if self._config_service is None:
+            return
+        try:
+            current = self._config_service.load(defaults={})
+            current["binary_assets_mode_enabled"] = enabled
+            self._config_service.save(current)
+        except Exception as exc:  # OSError, PermissionError, JSONDecodeError, etc.
+            self.view.show_error(
+                "Error guardando configuración",
+                f"No se pudo guardar la preferencia de modo binario:\n\n{exc}\n\n"
+                "El modo está activo en esta sesión pero no persistirá al reiniciar.",
+            )
+
+    def is_auto_select_allowed(self) -> bool:
+        """Return False when binary mode is ON — auto-select is unsafe in that mode."""
+        return not self._binary_mode
 
     def set_protection(
         self,
@@ -55,11 +97,20 @@ class DuplicatesPresenter:
         """Start the duplicate scan in a background thread."""
         if not paths:
             return
+
+        # Snapshot mode at scan-start time (threading rule: worker never reads _binary_mode).
+        binary = self._binary_mode
+        blocked_paths = (
+            PATHS_BLOQUEADOS_SCAN_TECH if binary else PATHS_BLOQUEADOS_SCAN
+        )
+        allowed_extensions = EXTENSIONES_ASSETS_BINARIOS if binary else None
+        min_size = BINARY_MODE_SIZE_FLOOR_BYTES if binary else 1024
+
         self._scanning = True
         self.view.on_scan_started()
         threading.Thread(
             target=self._scan_worker,
-            args=(paths,),
+            args=(paths, blocked_paths, allowed_extensions, min_size),
             daemon=True,
         ).start()
 
@@ -67,12 +118,21 @@ class DuplicatesPresenter:
         """Signal the background thread to stop."""
         self._scanning = False
 
-    def _scan_worker(self, paths: list[str]) -> None:
+    def _scan_worker(
+        self,
+        paths: list[str],
+        blocked_paths: tuple[str, ...],
+        allowed_extensions: tuple[str, ...] | None,
+        min_size_bytes: int,
+    ) -> None:
         groups = find_duplicates(
             paths=paths,
             protected_keywords=self._protected_keywords,
             on_progress=self.view.log,
             should_continue=lambda: self._scanning,
+            blocked_paths=blocked_paths,
+            allowed_extensions=allowed_extensions,
+            min_size_bytes=min_size_bytes,
         )
         self.view.after(0, self._display_results, groups)
 
