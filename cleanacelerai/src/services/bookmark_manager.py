@@ -11,6 +11,8 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from send2trash import send2trash
+
 logger = logging.getLogger(__name__)
 
 
@@ -1330,7 +1332,7 @@ def _write_bookmarks(bookmark_file: str, data: dict[str, Any]) -> None:
     old_backups = sorted(glob.glob(pattern))
     for old in old_backups[:-1]:  # Keep only the most recent
         try:
-            os.remove(old)
+            send2trash(str(old))
         except OSError:
             pass
 

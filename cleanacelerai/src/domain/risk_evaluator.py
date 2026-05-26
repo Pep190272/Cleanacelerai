@@ -8,6 +8,7 @@ from .constants import (
     CARPETAS_PERFIL_PROTEGIDAS,
     CARPETAS_SISTEMA,
     DOTFILES_CRITICOS,
+    EXTENSIONES_CODIGO_PROTEGIDAS,
     EXTENSIONES_SISTEMA,
 )
 from .models import RiskLevel
@@ -49,23 +50,27 @@ def evaluate_file_risk(
     if nombre_archivo.endswith(EXTENSIONES_SISTEMA):
         return RiskLevel.CRITICAL
 
-    # 2. Dotfile protection (tuberías de configuración)
+    # 2. Web/code extension protection — highest guard, always blocks deletion
+    if nombre_archivo.endswith(EXTENSIONES_CODIGO_PROTEGIDAS):
+        return RiskLevel.CRITICAL
+
+    # 3. Dotfile protection (tuberías de configuración)
     for parte in partes_ruta:
         if parte in DOTFILES_CRITICOS:
             return RiskLevel.DOTFILE
 
-    # 3. User-defined keyword protection
+    # 4. User-defined keyword protection
     for kw in protected_keywords:
         if kw.lower() in ruta_lower:
             return RiskLevel.PROTECTED
 
-    # 4. User-defined folder protection
+    # 5. User-defined folder protection
     ruta_norm = os.path.normpath(path).lower()
     for folder in protected_folders:
         if os.path.normpath(folder).lower() in ruta_norm:
             return RiskLevel.PROJECT
 
-    # 5. User profile folders (safe to move, not safe to delete)
+    # 6. User profile folders (safe to move, not safe to delete)
     for perfil in CARPETAS_PERFIL_PROTEGIDAS:
         if perfil in partes_ruta:
             return RiskLevel.PERSONAL

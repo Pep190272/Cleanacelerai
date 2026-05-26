@@ -1,17 +1,52 @@
 """Infrastructure: safe file system operations."""
 from __future__ import annotations
 
+import datetime
+import hashlib
+import json
 import os
 import stat
 import subprocess
+from pathlib import Path
+
+from send2trash import send2trash
+
+
+def _log_deletion(file_path: str) -> None:
+    """
+    Append a JSON record to ~/.cleanacelerai/deleted.log before every deletion.
+
+    Args:
+        file_path: Absolute path of the file about to be deleted.
+    """
+    log_dir = Path.home() / '.cleanacelerai'
+    log_dir.mkdir(exist_ok=True)
+    log_path = log_dir / 'deleted.log'
+    try:
+        size = Path(file_path).stat().st_size
+    except OSError:
+        size = -1
+    try:
+        with open(file_path, 'rb') as f:
+            file_hash = hashlib.sha256(f.read(65536)).hexdigest()[:16]
+    except OSError:
+        file_hash = 'unreadable'
+    entry = {
+        'ts': datetime.datetime.now().isoformat(timespec='seconds'),
+        'path': str(file_path),
+        'size': size,
+        'sha256_first_64k': file_hash,
+    }
+    with log_path.open('a', encoding='utf-8') as f:
+        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
 
 
 def safe_delete(path: str) -> tuple[bool, str]:
     """
-    Delete a file safely, handling read-only flags and long paths.
+    Delete a file safely by sending it to the Recycle Bin.
 
-    Uses the MS-DOS NUL workaround for paths ending in '\\nul' or
-    exceeding 250 characters.
+    Logs the deletion to ~/.cleanacelerai/deleted.log before trashing.
+    Handles read-only flags and long paths (MS-DOS NUL workaround).
 
     Args:
         path: Absolute path to the file.
@@ -39,7 +74,8 @@ def safe_delete(path: str) -> tuple[bool, str]:
             os.chmod(path, stat.S_IWRITE)
         except (PermissionError, OSError):
             pass  # Best-effort: remove read-only flag
-        os.remove(path)
+        _log_deletion(path)
+        send2trash(str(path))
         return True, ""
     except PermissionError as e:
         return False, f"Permiso denegado: {e}"

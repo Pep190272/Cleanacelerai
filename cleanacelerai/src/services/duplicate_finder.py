@@ -10,6 +10,7 @@ from ..domain.constants import (
     ARCHIVOS_PROHIBIDOS,
     CARPETAS_SISTEMA,
     EXTENSIONES_SISTEMA,
+    PATHS_BLOQUEADOS_SCAN,
 )
 from ..domain.models import DuplicateGroup, FileInfo
 from ..domain.utils import normalizar_ruta
@@ -83,6 +84,12 @@ def find_duplicates(
             # Skip system folders
             dirs[:] = [d for d in dirs if d.lower() not in CARPETAS_SISTEMA]
             if CARPETAS_SISTEMA.intersection(normalizar_ruta(root)):
+                continue
+
+            # Skip globally blocked paths (dev/project folders)
+            root_norm = os.path.normpath(root).lower()
+            if any(blocked.lower() in root_norm for blocked in PATHS_BLOQUEADOS_SCAN):
+                dirs.clear()
                 continue
 
             # Skip protected keyword folders

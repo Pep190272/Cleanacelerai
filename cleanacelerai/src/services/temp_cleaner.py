@@ -6,7 +6,10 @@ import stat
 import subprocess
 from typing import Callable
 
+from send2trash import send2trash
+
 from ..domain.models import CleanupResult
+from ..infrastructure.file_system import _log_deletion
 
 
 def get_temp_paths() -> list[str]:
@@ -104,7 +107,8 @@ def clean_temp_files(
                 os.chmod(archivo, stat.S_IWRITE)
             except (PermissionError, OSError):
                 pass
-            os.remove(archivo)
+            _log_deletion(archivo)
+            send2trash(str(archivo))
             result.deleted += 1
             result.freed_mb += peso / (1024 * 1024)
         except PermissionError:

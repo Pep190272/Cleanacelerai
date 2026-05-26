@@ -5,6 +5,7 @@ import datetime
 import threading
 from typing import TYPE_CHECKING, Callable
 
+from ...domain.constants import PATHS_BLOQUEADOS_SCAN
 from ...domain.models import DuplicateGroup, RiskLevel
 from ...domain.risk_evaluator import evaluate_file_risk, format_risk_label, get_risk_tag
 from ...infrastructure.file_system import open_in_explorer, safe_delete
@@ -22,6 +23,23 @@ class DuplicatesPresenter:
         self._scanning = False
         self._protected_keywords: list[str] = []
         self._protected_folders: list[str] = []
+
+    def is_path_blocked(self, path: str) -> bool:
+        """
+        Return True if the given path matches any entry in PATHS_BLOQUEADOS_SCAN.
+
+        Normalizes separators before comparing so forward-slash and
+        backslash paths are both handled correctly.
+
+        Args:
+            path: Folder path chosen by the user.
+
+        Returns:
+            True if the path must be refused.
+        """
+        import os
+        path_norm = os.path.normpath(path).lower()
+        return any(blocked.lower() in path_norm for blocked in PATHS_BLOQUEADOS_SCAN)
 
     def set_protection(
         self,

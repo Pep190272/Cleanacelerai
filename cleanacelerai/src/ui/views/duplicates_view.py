@@ -156,7 +156,17 @@ class DuplicatesView(ctk.CTkFrame):
     # ── User event handlers ────────────────────────────────────────────────
     def _add_ruta(self) -> None:
         carpeta = filedialog.askdirectory()
-        if carpeta and carpeta not in self._rutas_analisis:
+        if not carpeta:
+            return
+        if self._presenter and self._presenter.is_path_blocked(carpeta):
+            messagebox.showerror(
+                "Ruta Bloqueada",
+                f"Esta carpeta contiene código de proyecto y no puede ser escaneada para borrado:\n\n"
+                f"{carpeta}\n\n"
+                "Añade únicamente carpetas de fotos, música, vídeos o archivos personales.",
+            )
+            return
+        if carpeta not in self._rutas_analisis:
             self._rutas_analisis.append(carpeta)
             self._lista_rutas.insert(tk.END, carpeta)
 
