@@ -68,6 +68,11 @@ def safe_delete(path: str) -> tuple[bool, str]:
         Tuple of (success: bool, error_message: str).
         error_message is empty on success.
     """
+    # Normalize separators — Tk filedialog returns forward-slash paths on
+    # Windows; send2trash + '\\?\' extended-path prefix demands consistent
+    # backslashes, otherwise [Errno 3] is raised.
+    path = os.path.normpath(path)
+
     # MS-DOS hechizo for problematic paths
     if path.lower().endswith("\nul") or len(path) > 250:
         try:
@@ -88,7 +93,7 @@ def safe_delete(path: str) -> tuple[bool, str]:
         except (PermissionError, OSError):
             pass  # Best-effort: remove read-only flag
         _log_deletion(path)
-        send2trash(str(path))
+        send2trash(path)
         return True, ""
     except PermissionError as e:
         return False, f"Permiso denegado: {e}"
@@ -117,12 +122,18 @@ def safe_delete_dir(path: str, source: str = "asesor") -> tuple[bool, str]:
         (True, 'FALLBACK_RENAME:{new_path}') on fallback rename success.
         (False, error_msg) on hard failure.
     """
+    # Normalize separators BEFORE any operation. Tk filedialog returns
+    # forward-slash paths on Windows, and send2trash internally prepends the
+    # extended-path prefix '\\?\' which requires consistent backslashes,
+    # otherwise [Errno 3] "ruta no encontrada" is raised.
+    path = os.path.normpath(path)
+
     if not os.path.isdir(path):
         return False, f"No es un directorio: {path}"
 
     try:
         _log_deletion(path, source=source, fallback_rename=False)
-        send2trash(str(path))
+        send2trash(path)
         return True, ""
     except TrashPermissionError:
         # Drive does not allow Recycle Bin (e.g., D: on some configs).

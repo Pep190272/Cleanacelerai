@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from unittest.mock import MagicMock, call, patch
 
@@ -323,4 +324,32 @@ class TestSafeDeleteDir:
         args, kwargs = first_call_kwargs
         assert kwargs.get("source") == "asesor.limpieza-profunda" or (
             len(args) > 1 and args[1] == "asesor.limpieza-profunda"
+        )
+
+    def test_safe_delete_dir_normalizes_forward_slashes(self, tmp_path: Path) -> None:
+        """Regression: Tk filedialog.askdirectory returns forward-slash paths on
+        Windows. send2trash then internally prepends the extended-path prefix
+        '\\\\?\\' which DEMANDS consistent backslashes, and the call fails with
+        '[Errno 3] El sistema no puede encontrar la ruta especificada'.
+
+        safe_delete_dir MUST normalize the path before passing to send2trash."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+        target_str = str(target)
+
+        # Build a forward-slash version (no-op on POSIX, real swap on Windows)
+        forward = target_str.replace("\\", "/")
+        expected_normalized = os.path.normpath(forward)
+
+        with (
+            patch("src.infrastructure.file_system.send2trash") as mock_trash,
+            patch("src.infrastructure.file_system._log_deletion"),
+        ):
+            ok, err = safe_delete_dir(forward)
+
+        assert ok is True, f"safe_delete_dir failed: {err}"
+        called_path = mock_trash.call_args[0][0]
+        assert called_path == expected_normalized, (
+            f"send2trash received non-normalized path. "
+            f"Expected: {expected_normalized!r}, got: {called_path!r}"
         )
