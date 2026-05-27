@@ -441,6 +441,38 @@ class TestDeleteItems:
         assert mock_sdd.call_count == 2
         assert len(view.remove_item_calls) == 2
 
+    def test_delete_items_fallback_and_error_both_surfaced(self) -> None:
+        """Regression for W-2: when a batch has BOTH fallback renames AND hard errors,
+        both summaries must reach the user. Old elif-only branch suppressed the error
+        summary when any fallback existed."""
+        presenter, view = self._make_presenter()
+
+        items = [
+            ("id1", r"C:\plain\folder1", "folder1"),
+            ("id2", r"C:\plain\folder2", "folder2"),
+        ]
+
+        with (
+            patch(
+                "src.ui.presenters.asesor_presenter.safe_delete_dir",
+                side_effect=[
+                    (True, r"FALLBACK_RENAME:C:\plain\folder1.UNSAFE-CANT-RECYCLE.20250101T000000.bak"),
+                    (False, "OSError: permission denied"),
+                ],
+            ),
+            patch("src.ui.presenters.asesor_presenter.detect_project_signature", return_value=None),
+            patch("os.path.isdir", return_value=True),
+        ):
+            presenter.delete_items(items)
+
+        warning_titles = [title.lower() for title, _msg in view.show_warning_calls]
+        assert any("fallback" in t for t in warning_titles), (
+            f"Missing fallback warning. Got titles: {warning_titles}"
+        )
+        assert any("error" in t for t in warning_titles), (
+            f"Missing error warning. Got titles: {warning_titles}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # TASK 6 — move_items tests

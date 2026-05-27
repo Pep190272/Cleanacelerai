@@ -223,10 +223,10 @@ class AsesorPresenter:
                 f"(la unidad lo prohibe). Se renombraron en su lugar:\n\n{rename_lines}\n\n"
                 "Borralas manualmente cuando quieras.",
             )
-        elif state["errores"]:
-            msg += f"\n\n{len(state['errores'])} error(es):\n" + "\n".join(state["errores"])
-            self.view.show_warning("Borrar — con errores", msg)
-        else:
+        if state["errores"]:
+            error_msg = msg + f"\n\n{len(state['errores'])} error(es):\n" + "\n".join(state["errores"])
+            self.view.show_warning("Borrar — con errores", error_msg)
+        elif not state["fallbacks"]:
             self.view.show_info("Borrar — completado", msg)
 
     def explain(self, nombre: str, tipo: str) -> str:
