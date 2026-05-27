@@ -5,7 +5,6 @@ import os
 import time
 
 from ..domain.constants import (
-    PATHS_BLOQUEADOS_SCAN_PROJECTS,
     PROJECT_SIGNAL_HAS_CARGO_TOML,
     PROJECT_SIGNAL_HAS_COMPOSER_JSON,
     PROJECT_SIGNAL_HAS_CSPROJ,
@@ -21,6 +20,15 @@ from ..domain.constants import (
     PROJECT_SIGNAL_INSIDE_MIS_PROYECTOS,
 )
 from ..domain.models import ProjectSignature
+
+
+# Inlined path markers — kept independent of the Duplicados IA blocklist
+# split so this service can ship without dependencies on that module's
+# constant layout.
+_PROJECT_PATH_MARKERS: tuple[str, ...] = (
+    "\\Local Sites\\",
+    "\\Mis_proyectos\\",
+)
 
 
 # Exact-name matches (lowercased). dir/file flag tells the detector
@@ -58,7 +66,7 @@ def detect_project_signature(path: str) -> ProjectSignature | None:
     # Path-based signals: uses normpath().lower() + os.sep trick consistent
     # with DuplicatesPresenter.is_path_blocked.
     path_norm = os.path.normpath(path).lower() + os.sep
-    for marker in PATHS_BLOQUEADOS_SCAN_PROJECTS:
+    for marker in _PROJECT_PATH_MARKERS:
         marker_l = marker.lower()
         if marker_l in path_norm:
             if "mis_proyectos" in marker_l:
