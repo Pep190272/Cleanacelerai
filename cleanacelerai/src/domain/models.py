@@ -172,3 +172,16 @@ class DeepCleanResult:
     total_scanned: int
     total_recoverable_bytes: int
     scan_errors: list[str]
+
+
+# --- Asesor Safe Delete ---
+
+@dataclass(frozen=True)
+class ProjectSignature:
+    """A folder that exhibits one or more 'this is a real project' signals.
+
+    Immutable value object: detector output must not be mutated by presenter or view.
+    """
+    path: str
+    signals: tuple[str, ...]  # canonical PROJECT_SIGNAL_* values
+    last_modified_days: int | None
