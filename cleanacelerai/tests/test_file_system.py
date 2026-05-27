@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, call, patch
 
 import pytest
 
-from src.infrastructure.file_system import _log_deletion, safe_delete
+from src.infrastructure.file_system import _log_deletion, safe_delete, safe_delete_dir
 
 
 class TestLogDeletion:
@@ -165,3 +165,162 @@ class TestSafeDelete:
 
         assert ok is True
         assert err == ""
+
+
+class TestLogDeletionExtended:
+    """Tests for the extended _log_deletion signature (source + fallback_rename)."""
+
+    def test_log_deletion_with_source(self, tmp_path: Path) -> None:
+        """GIVEN source is provided, THEN log line contains 'source' key."""
+        target = tmp_path / "deleteme.txt"
+        target.write_bytes(b"data " * 200)
+
+        with patch.object(Path, "home", staticmethod(lambda: tmp_path)):
+            _log_deletion(str(target), source="asesor.orden-general")
+
+        log_path = tmp_path / ".cleanacelerai" / "deleted.log"
+        entry = json.loads(log_path.read_text(encoding="utf-8").strip())
+        assert "source" in entry
+        assert entry["source"] == "asesor.orden-general"
+
+    def test_log_deletion_without_source(self, tmp_path: Path) -> None:
+        """GIVEN no source (existing callers), THEN log line has NO 'source' key."""
+        target = tmp_path / "deleteme.txt"
+        target.write_bytes(b"data " * 200)
+
+        with patch.object(Path, "home", staticmethod(lambda: tmp_path)):
+            _log_deletion(str(target))  # no source kwarg
+
+        log_path = tmp_path / ".cleanacelerai" / "deleted.log"
+        entry = json.loads(log_path.read_text(encoding="utf-8").strip())
+        assert "source" not in entry  # backward-compatible shape
+
+    def test_log_deletion_with_fallback_rename(self, tmp_path: Path) -> None:
+        """GIVEN fallback_rename=True, THEN log line includes fallback_rename: true."""
+        target = tmp_path / "deleteme.txt"
+        target.write_bytes(b"data " * 200)
+
+        with patch.object(Path, "home", staticmethod(lambda: tmp_path)):
+            _log_deletion(str(target), source="asesor", fallback_rename=True)
+
+        log_path = tmp_path / ".cleanacelerai" / "deleted.log"
+        entry = json.loads(log_path.read_text(encoding="utf-8").strip())
+        assert entry.get("fallback_rename") is True
+
+
+class TestSafeDeleteDir:
+    """Tests for safe_delete_dir — directory-safe deletion via send2trash."""
+
+    def test_safe_delete_dir_success(self, tmp_path: Path) -> None:
+        """GIVEN valid dir and send2trash succeeds, THEN returns (True, '') and logs."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        with (
+            patch("src.infrastructure.file_system.send2trash") as mock_trash,
+            patch("src.infrastructure.file_system._log_deletion") as mock_log,
+        ):
+            ok, err = safe_delete_dir(str(target))
+
+        assert ok is True
+        assert err == ""
+        mock_trash.assert_called_once()
+        mock_log.assert_called()
+
+    def test_safe_delete_dir_logs_before_trashing(self, tmp_path: Path) -> None:
+        """Log call MUST happen BEFORE send2trash call."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        call_order: list[str] = []
+
+        def fake_log(path: str, source: str | None = None, fallback_rename: bool = False) -> None:
+            call_order.append("log")
+
+        def fake_trash(path: str) -> None:
+            call_order.append("trash")
+
+        with (
+            patch("src.infrastructure.file_system._log_deletion", side_effect=fake_log),
+            patch("src.infrastructure.file_system.send2trash", side_effect=fake_trash),
+        ):
+            safe_delete_dir(str(target))
+
+        assert call_order[0] == "log", "Log must happen BEFORE trash"
+        assert "trash" in call_order
+
+    def test_safe_delete_dir_fallback_rename(self, tmp_path: Path) -> None:
+        """GIVEN TrashPermissionError, THEN fallback rename happens and returns FALLBACK_RENAME prefix."""
+        from send2trash import TrashPermissionError
+
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        with (
+            patch("src.infrastructure.file_system.send2trash", side_effect=TrashPermissionError("no recycle")),
+            patch("src.infrastructure.file_system._log_deletion") as mock_log,
+            patch("os.rename") as mock_rename,
+        ):
+            ok, err = safe_delete_dir(str(target), source="asesor.orden-general")
+
+        assert ok is True
+        assert err.startswith("FALLBACK_RENAME:")
+        # _log_deletion should be called twice: once before send2trash, once for fallback
+        assert mock_log.call_count == 2
+        # Second call should have fallback_rename=True
+        _, kwargs = mock_log.call_args_list[1]
+        assert kwargs.get("fallback_rename") is True or mock_log.call_args_list[1][1].get("fallback_rename") is True
+
+    def test_safe_delete_dir_hard_failure(self, tmp_path: Path) -> None:
+        """GIVEN OSError (not TrashPermissionError), THEN returns (False, error_msg)."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        with (
+            patch("src.infrastructure.file_system.send2trash", side_effect=OSError("disk error")),
+            patch("src.infrastructure.file_system._log_deletion"),
+        ):
+            ok, err = safe_delete_dir(str(target))
+
+        assert ok is False
+        assert "disk error" in err
+
+    def test_safe_delete_dir_not_a_directory(self, tmp_path: Path) -> None:
+        """GIVEN a file path (not a dir), THEN returns (False, ...) immediately."""
+        target = tmp_path / "file.txt"
+        target.write_bytes(b"hi")
+
+        ok, err = safe_delete_dir(str(target))
+        assert ok is False
+
+    def test_safe_delete_dir_already_gone(self, tmp_path: Path) -> None:
+        """GIVEN FileNotFoundError from send2trash, THEN returns (True, '') — already gone."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        with (
+            patch("src.infrastructure.file_system.send2trash", side_effect=FileNotFoundError()),
+            patch("src.infrastructure.file_system._log_deletion"),
+        ):
+            ok, err = safe_delete_dir(str(target))
+
+        assert ok is True
+        assert err == ""
+
+    def test_safe_delete_dir_source_passed_to_log(self, tmp_path: Path) -> None:
+        """GIVEN source kwarg, THEN _log_deletion is called with that source."""
+        target = tmp_path / "mydir"
+        target.mkdir()
+
+        with (
+            patch("src.infrastructure.file_system.send2trash"),
+            patch("src.infrastructure.file_system._log_deletion") as mock_log,
+        ):
+            safe_delete_dir(str(target), source="asesor.limpieza-profunda")
+
+        first_call_kwargs = mock_log.call_args_list[0]
+        # Check that source="asesor.limpieza-profunda" was passed
+        args, kwargs = first_call_kwargs
+        assert kwargs.get("source") == "asesor.limpieza-profunda" or (
+            len(args) > 1 and args[1] == "asesor.limpieza-profunda"
+        )

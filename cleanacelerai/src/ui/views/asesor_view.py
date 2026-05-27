@@ -1,8 +1,9 @@
 """View: Chaos Advisor — passive widget layer with tabbed interface."""
 from __future__ import annotations
 
+import os
 from tkinter import filedialog, messagebox, ttk
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import customtkinter as ctk
 
@@ -18,6 +19,7 @@ from ...domain.constants import (
     COLOR_WARNING,
     DEEP_CLEAN_BUNDLE_ICONS,
     DEEP_CLEAN_RISK_COLORS,
+    PROJECT_SIGNAL_LABELS,
 )
 from ...domain.models import (
     DeepCleanBundle,
@@ -26,6 +28,7 @@ from ...domain.models import (
     DeepCleanRisk,
     DocumentAnalysisResult,
     DocumentCategory,
+    ProjectSignature,
 )
 from ...services.chaos_advisor import AdvisorEntry
 
@@ -428,6 +431,142 @@ class AsesorView(ctk.CTkFrame):
 
     def show_error(self, title: str, message: str) -> None:
         messagebox.showerror(title, message)
+
+    def show_project_confirm_dialog(
+        self,
+        signature: ProjectSignature,
+        on_confirm: Callable[[bool], None],
+    ) -> None:
+        """Modal dialog: type the folder name to confirm deletion of a project folder.
+
+        Calls on_confirm(True) when the user types the exact name and clicks Confirm.
+        Calls on_confirm(False) on Cancel or window close.
+        The 'resolved' guard ensures on_confirm fires exactly once.
+        """
+        folder_name = os.path.basename(os.path.normpath(signature.path))
+
+        w = ctk.CTkToplevel(self)
+        w.title("Confirmar eliminacion de proyecto")
+        w.geometry("560x440")
+        w.attributes("-topmost", True)
+        w.transient(self.winfo_toplevel())
+        w.grab_set()
+
+        # Guard: prevents double-callback if user presses Confirm then closes the X
+        resolved: dict[str, bool] = {"value": False}
+
+        def _resolve(confirmed: bool) -> None:
+            if resolved["value"]:
+                return
+            resolved["value"] = True
+            try:
+                w.grab_release()
+            except Exception:
+                pass
+            w.destroy()
+            on_confirm(confirmed)
+
+        # Header — folder name in danger color
+        ctk.CTkLabel(
+            w,
+            text=folder_name,
+            font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=COLOR_DANGER,
+        ).pack(padx=20, pady=(20, 5), anchor="w")
+
+        # Full path (muted)
+        ctk.CTkLabel(
+            w,
+            text=signature.path,
+            font=ctk.CTkFont(size=10),
+            text_color=COLOR_TEXT_MUTED,
+            wraplength=520,
+            justify="left",
+        ).pack(padx=20, pady=(0, 10), anchor="w")
+
+        # Signals list
+        signals_text = "Senales detectadas:\n" + "\n".join(
+            f"  - {PROJECT_SIGNAL_LABELS.get(s, s)}"
+            for s in signature.signals
+        )
+        if signature.last_modified_days is not None:
+            signals_text += f"\n  - Ultima modificacion: hace {signature.last_modified_days} dia(s)"
+
+        ctk.CTkLabel(
+            w,
+            text=signals_text,
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_TEXT_MAIN,
+            justify="left",
+            anchor="w",
+        ).pack(padx=20, pady=(0, 15), anchor="w", fill="x")
+
+        # Type-to-confirm instruction
+        ctk.CTkLabel(
+            w,
+            text="Escribi el nombre exacto del proyecto para confirmar:",
+            font=ctk.CTkFont(size=11),
+            text_color=COLOR_TEXT_MAIN,
+        ).pack(padx=20, pady=(0, 5), anchor="w")
+
+        entry = ctk.CTkEntry(w, font=ctk.CTkFont(size=12))
+        entry.pack(padx=20, fill="x")
+        entry.focus_set()
+
+        # Button row
+        btn_row = ctk.CTkFrame(w, fg_color="transparent")
+        btn_row.pack(padx=20, pady=20, fill="x")
+
+        btn_cancel = ctk.CTkButton(
+            btn_row,
+            text="Cancelar",
+            fg_color=COLOR_BORDER,
+            hover_color=COLOR_TEXT_MUTED,
+            command=lambda: _resolve(False),
+        )
+        btn_cancel.pack(side="right", padx=(10, 0))
+
+        btn_confirm = ctk.CTkButton(
+            btn_row,
+            text="Eliminar",
+            fg_color=COLOR_DANGER,
+            hover_color="#B91C1C",
+            state="disabled",
+            command=lambda: _resolve(True),
+        )
+        btn_confirm.pack(side="right")
+
+        def _on_entry_change(*_args: object) -> None:
+            if entry.get() == folder_name:  # case-sensitive exact match
+                btn_confirm.configure(state="normal")
+            else:
+                btn_confirm.configure(state="disabled")
+
+        entry.bind("<KeyRelease>", _on_entry_change)
+
+        # Window close button (X) -> cancel
+        w.protocol("WM_DELETE_WINDOW", lambda: _resolve(False))
+
+    def show_project_move_warning_dialog(
+        self,
+        signature: ProjectSignature,
+        on_confirm: Callable[[bool], None],
+    ) -> None:
+        """Warning dialog for moving a folder that looks like a live project.
+
+        Uses messagebox.askyesno for simplicity (matches other Asesor confirmations).
+        Default answer is 'No' so an accidental Enter cancels.
+        """
+        folder_name = os.path.basename(os.path.normpath(signature.path))
+        answer = messagebox.askyesno(
+            "Mover proyecto",
+            f"'{folder_name}' parece ser un proyecto activo.\n\n"
+            "Si lo moves, los paths relativos (imports, configs, .git) pueden romperse.\n\n"
+            "Continuar con el movimiento?",
+            icon="warning",
+            default="no",
+        )
+        on_confirm(answer)
 
     # ── Public API for presenter — Tab 2 (Documentos) ──────────────────────
 

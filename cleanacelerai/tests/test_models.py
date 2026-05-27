@@ -4,6 +4,49 @@ import pytest
 from src.domain.models import CleanupResult, DuplicateGroup, FileInfo, RiskLevel
 
 
+class TestProjectSignature:
+    """Tests for the ProjectSignature value object (Domain A)."""
+
+    def test_project_signature_instantiation(self) -> None:
+        """GIVEN valid path/signals/last_modified_days, THEN fields are accessible."""
+        from src.domain.models import ProjectSignature
+
+        sig = ProjectSignature(
+            path=r"C:\Mis_proyectos\myapp",
+            signals=("has-git", "has-package-json"),
+            last_modified_days=3,
+        )
+        assert sig.path == r"C:\Mis_proyectos\myapp"
+        assert "has-git" in sig.signals
+        assert "has-package-json" in sig.signals
+        assert sig.last_modified_days == 3
+
+    def test_project_signature_is_frozen(self) -> None:
+        """THEN assigning to a field raises FrozenInstanceError."""
+        from dataclasses import FrozenInstanceError
+
+        from src.domain.models import ProjectSignature
+
+        sig = ProjectSignature(
+            path=r"C:\Mis_proyectos\myapp",
+            signals=("has-git",),
+            last_modified_days=None,
+        )
+        with pytest.raises(FrozenInstanceError):
+            sig.path = r"C:\other"  # type: ignore[misc]
+
+    def test_project_signature_signals_is_tuple(self) -> None:
+        """THEN signals is a tuple, not a list."""
+        from src.domain.models import ProjectSignature
+
+        sig = ProjectSignature(
+            path=r"C:\Mis_proyectos\myapp",
+            signals=("has-git",),
+            last_modified_days=0,
+        )
+        assert isinstance(sig.signals, tuple)
+
+
 class TestFileInfo:
     def test_size_mb(self) -> None:
         fi = FileInfo(path=r"C:\foo\bar.txt", size=2 * 1024 * 1024, mtime=0.0)

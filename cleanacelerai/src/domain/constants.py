@@ -133,3 +133,35 @@ SYSTEM_ROOT_PROTECTED: set[str] = {
     "system volume information", "boot",
     "documents and settings",
 }
+
+# --- Project-signature signals (Asesor Safe Delete) ---
+PROJECT_SIGNAL_INSIDE_MIS_PROYECTOS = "inside-mis-proyectos"
+PROJECT_SIGNAL_INSIDE_LOCAL_SITES   = "inside-local-sites"
+PROJECT_SIGNAL_HAS_GIT              = "has-git"
+PROJECT_SIGNAL_HAS_PACKAGE_JSON     = "has-package-json"
+PROJECT_SIGNAL_HAS_COMPOSER_JSON    = "has-composer-json"
+PROJECT_SIGNAL_HAS_PYPROJECT_TOML   = "has-pyproject-toml"
+PROJECT_SIGNAL_HAS_CARGO_TOML       = "has-cargo-toml"
+PROJECT_SIGNAL_HAS_GO_MOD           = "has-go-mod"
+PROJECT_SIGNAL_HAS_POM_XML          = "has-pom-xml"
+PROJECT_SIGNAL_HAS_SOLUTION_FILE    = "has-solution-file"
+PROJECT_SIGNAL_HAS_CSPROJ           = "has-csproj"
+PROJECT_SIGNAL_HAS_WP_CONFIG        = "has-wp-config"
+PROJECT_SIGNAL_HAS_GEMFILE          = "has-gemfile"
+
+# Human-readable labels for the confirm dialog. View imports this map.
+PROJECT_SIGNAL_LABELS: dict[str, str] = {
+    PROJECT_SIGNAL_INSIDE_MIS_PROYECTOS: "Esta dentro de Mis_proyectos",
+    PROJECT_SIGNAL_INSIDE_LOCAL_SITES:   "Esta dentro de Local Sites",
+    PROJECT_SIGNAL_HAS_GIT:              "Contiene .git",
+    PROJECT_SIGNAL_HAS_PACKAGE_JSON:     "Contiene package.json",
+    PROJECT_SIGNAL_HAS_COMPOSER_JSON:    "Contiene composer.json",
+    PROJECT_SIGNAL_HAS_PYPROJECT_TOML:   "Contiene pyproject.toml",
+    PROJECT_SIGNAL_HAS_CARGO_TOML:       "Contiene Cargo.toml",
+    PROJECT_SIGNAL_HAS_GO_MOD:           "Contiene go.mod",
+    PROJECT_SIGNAL_HAS_POM_XML:          "Contiene pom.xml",
+    PROJECT_SIGNAL_HAS_SOLUTION_FILE:    "Contiene un .sln",
+    PROJECT_SIGNAL_HAS_CSPROJ:           "Contiene un .csproj",
+    PROJECT_SIGNAL_HAS_WP_CONFIG:        "Contiene wp-config.php",
+    PROJECT_SIGNAL_HAS_GEMFILE:          "Contiene Gemfile",
+}

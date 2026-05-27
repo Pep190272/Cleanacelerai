@@ -14,8 +14,9 @@ from ...domain.models import (
     DeepCleanRisk,
     DocumentAnalysisResult,
 )
-from ...infrastructure.file_system import safe_delete
+from ...infrastructure.file_system import safe_delete, safe_delete_dir
 from ...services.chaos_advisor import analyze_folder, explain_element
+from ...services.project_detector import detect_project_signature
 
 if TYPE_CHECKING:
     from ..views.asesor_view import AsesorView
@@ -71,57 +72,161 @@ class AsesorPresenter:
         self.view.show_entries(entries)
 
     def move_items(self, items: list[tuple[str, str, str]], destino: str) -> None:
-        """Move the given (item_id, ruta, nombre) tuples to *destino* folder."""
-        movidos = 0
-        errores: list[str] = []
+        """Move the given (item_id, ruta, nombre) tuples to *destino* folder.
 
-        for item_id, ruta, nombre in items:
-            try:
-                shutil.move(ruta, destino)
-                movidos += 1
-                self.view.remove_item(item_id)
-            except shutil.Error as e:
-                errores.append(f"{nombre}: {e}")
-            except PermissionError as e:
-                errores.append(f"{nombre}: Permiso denegado — {e}")
-            except OSError as e:
-                errores.append(f"{nombre}: {e}")
+        Folders that carry a project signature surface a WARNING dialog before
+        proceeding. Non-project items are moved directly.
+        """
+        state: dict = {
+            "queue": list(items),
+            "destino": destino,
+            "movidos": 0,
+            "errores": [],
+        }
+        self._drain_move_queue(state)
 
-        msg = f"{movidos} elemento(s) movido(s) a:\n{destino}"
-        if errores:
-            msg += f"\n\n{len(errores)} error(es):\n" + "\n".join(errores)
+    def _drain_move_queue(self, state: dict) -> None:
+        """Process the move queue until empty or a project dialog yields control."""
+        while state["queue"]:
+            item_id, ruta, nombre = state["queue"][0]
+            if os.path.isdir(ruta):
+                sig = detect_project_signature(ruta)
+                if sig is not None:
+                    def _cb(
+                        confirmed: bool,
+                        item_id: str = item_id,
+                        ruta: str = ruta,
+                        nombre: str = nombre,
+                        state: dict = state,
+                    ) -> None:
+                        state["queue"].pop(0)
+                        if confirmed:
+                            self._execute_move(item_id, ruta, nombre, state)
+                        self._drain_move_queue(state)
+
+                    self.view.show_project_move_warning_dialog(sig, _cb)
+                    return  # wait for callback
+            state["queue"].pop(0)
+            self._execute_move(item_id, ruta, nombre, state)
+        self._finish_move_summary(state)
+
+    def _execute_move(self, item_id: str, ruta: str, nombre: str, state: dict) -> None:
+        try:
+            shutil.move(ruta, state["destino"])
+            state["movidos"] += 1
+            self.view.remove_item(item_id)
+        except shutil.Error as e:
+            state["errores"].append(f"{nombre}: {e}")
+        except PermissionError as e:
+            state["errores"].append(f"{nombre}: Permiso denegado — {e}")
+        except OSError as e:
+            state["errores"].append(f"{nombre}: {e}")
+
+    def _finish_move_summary(self, state: dict) -> None:
+        destino = state["destino"]
+        msg = f"{state['movidos']} elemento(s) movido(s) a:\n{destino}"
+        if state["errores"]:
+            msg += f"\n\n{len(state['errores'])} error(es):\n" + "\n".join(state["errores"])
             self.view.show_warning("Mover — con errores", msg)
         else:
             self.view.show_info("Mover — completado", msg)
 
     def delete_items(self, items: list[tuple[str, str, str]]) -> None:
-        """Delete the given (item_id, ruta, nombre) tuples."""
-        borrados = 0
-        errores: list[str] = []
+        """Delete the given (item_id, ruta, nombre) tuples.
 
-        for item_id, ruta, nombre in items:
+        Folders without a project signature are sent to the Recycle Bin via
+        safe_delete_dir. Folders with a project signature require the user to
+        type the folder name before deletion proceeds (type-to-confirm dialog).
+        Files continue to use the existing safe_delete path.
+        """
+        state: dict = {
+            "queue": list(items),
+            "borrados": 0,
+            "errores": [],
+            "fallbacks": [],
+        }
+        self._drain_delete_queue(state, source="asesor.orden-general")
+
+    def _drain_delete_queue(self, state: dict, source: str) -> None:
+        """Process the delete queue until empty or a project dialog yields control."""
+        while state["queue"]:
+            item_id, ruta, nombre = state["queue"][0]
             if os.path.isdir(ruta):
-                try:
-                    shutil.rmtree(ruta)
-                    borrados += 1
-                    self.view.remove_item(item_id)
-                except PermissionError as e:
-                    errores.append(f"{nombre}: Permiso denegado — {e}")
-                except OSError as e:
-                    errores.append(f"{nombre}: {e}")
-            else:
-                ok, error = safe_delete(ruta)
-                if ok:
-                    borrados += 1
-                    self.view.remove_item(item_id)
-                else:
-                    errores.append(f"{nombre}: {error}")
+                signature = detect_project_signature(ruta)
+                if signature is not None:
+                    def _cb(
+                        confirmed: bool,
+                        item_id: str = item_id,
+                        ruta: str = ruta,
+                        nombre: str = nombre,
+                        state: dict = state,
+                        source: str = source,
+                    ) -> None:
+                        state["queue"].pop(0)
+                        if confirmed:
+                            self._execute_dir_delete(item_id, ruta, nombre, source, state)
+                        # on cancel: silent skip, no log, no error row (spec rule)
+                        self._drain_delete_queue(state, source=source)
 
-        msg = f"{borrados} elemento(s) eliminado(s)."
-        if errores:
-            msg += f"\n\n{len(errores)} error(es):\n" + "\n".join(errores)
-            self.view.show_warning("Borrar — con errores", msg)
+                    self.view.show_project_confirm_dialog(signature, _cb)
+                    return  # wait for callback
+                # Plain directory — no project signature
+                state["queue"].pop(0)
+                self._execute_dir_delete(item_id, ruta, nombre, source, state)
+            else:
+                state["queue"].pop(0)
+                self._execute_file_delete(item_id, ruta, nombre, state)
+        # Queue drained
+        self._finish_delete_summary(state)
+
+    def _execute_dir_delete(
+        self,
+        item_id: str,
+        ruta: str,
+        nombre: str,
+        source: str,
+        state: dict,
+    ) -> None:
+        ok, error = safe_delete_dir(ruta, source=source)
+        if ok:
+            state["borrados"] += 1
+            self.view.remove_item(item_id)
+            if error.startswith("FALLBACK_RENAME:"):
+                new_path = error.split(":", 1)[1]
+                state["fallbacks"].append((nombre, new_path))
         else:
+            state["errores"].append(f"{nombre}: {error}")
+
+    def _execute_file_delete(
+        self,
+        item_id: str,
+        ruta: str,
+        nombre: str,
+        state: dict,
+    ) -> None:
+        ok, error = safe_delete(ruta)
+        if ok:
+            state["borrados"] += 1
+            self.view.remove_item(item_id)
+        else:
+            state["errores"].append(f"{nombre}: {error}")
+
+    def _finish_delete_summary(self, state: dict) -> None:
+        msg = f"{state['borrados']} elemento(s) eliminado(s)."
+        if state["fallbacks"]:
+            rename_lines = "\n".join(
+                f"  - {n} -> {p}" for n, p in state["fallbacks"]
+            )
+            self.view.show_warning(
+                "Borrar — fallback en uso",
+                f"{len(state['fallbacks'])} carpeta(s) NO fueron al Reciclaje "
+                f"(la unidad lo prohibe). Se renombraron en su lugar:\n\n{rename_lines}\n\n"
+                "Borralas manualmente cuando quieras.",
+            )
+        if state["errores"]:
+            error_msg = msg + f"\n\n{len(state['errores'])} error(es):\n" + "\n".join(state["errores"])
+            self.view.show_warning("Borrar — con errores", error_msg)
+        elif not state["fallbacks"]:
             self.view.show_info("Borrar — completado", msg)
 
     def explain(self, nombre: str, tipo: str) -> str:
@@ -382,21 +487,23 @@ class AsesorPresenter:
             ):
                 return
 
-        # Execute deletion
-        try:
-            shutil.rmtree(path)
+        # Execute deletion via safe_delete_dir (no shutil.rmtree — invariant I1)
+        ok, error = safe_delete_dir(path, source="asesor.limpieza-profunda")
+        if ok:
             self._deep_entries = [e for e in self._deep_entries if e.path != path]
             self.view.remove_deep_entry(path)
-            self.view.show_info("Eliminado", f"'{entry.name}' eliminado correctamente.")
+            if error.startswith("FALLBACK_RENAME:"):
+                new_path = error.split(":", 1)[1]
+                self.view.show_warning(
+                    "Renombrado (no fue al Reciclaje)",
+                    f"'{entry.name}' NO pudo ir al Reciclaje. Se renombro a:\n{new_path}\n\n"
+                    "Borrala manualmente cuando quieras.",
+                )
+            else:
+                self.view.show_info("Eliminado", f"'{entry.name}' eliminado correctamente.")
             self._update_recoverable_total()
-        except PermissionError:
-            self.view.show_error(
-                "Error",
-                f"Permiso denegado para eliminar '{entry.name}'.\n"
-                "Cerra los programas que la usen e intenta de nuevo.",
-            )
-        except OSError as e:
-            self.view.show_error("Error", f"No se pudo eliminar '{entry.name}':\n{e}")
+        else:
+            self.view.show_error("Error", f"No se pudo eliminar '{entry.name}':\n{error}")
 
     def bulk_delete_safe(self) -> None:
         """Delete all CACHE + EMPTY entries."""
@@ -435,13 +542,15 @@ class AsesorPresenter:
         errors: list[str] = []
 
         for entry in safe_entries:
-            try:
-                shutil.rmtree(entry.path)
+            ok, error = safe_delete_dir(entry.path, source="asesor.bulk-safe")
+            if ok:
                 self.view.remove_deep_entry(entry.path)
                 deleted_paths.add(entry.path)
                 deleted += 1
-            except (PermissionError, OSError) as e:
-                errors.append(f"{entry.name}: {e}")
+                if error.startswith("FALLBACK_RENAME:"):
+                    errors.append(f"{entry.name}: renombrado (no fue al Reciclaje)")
+            else:
+                errors.append(f"{entry.name}: {error}")
 
         self._deep_entries = [
             e for e in self._deep_entries if e.path not in deleted_paths
