@@ -517,15 +517,11 @@ class AsesorView(ctk.CTkFrame):
         btn_row = ctk.CTkFrame(w, fg_color="transparent")
         btn_row.pack(padx=20, pady=20, fill="x")
 
-        btn_cancel = ctk.CTkButton(
-            btn_row,
-            text="Cancelar",
-            fg_color=COLOR_BORDER,
-            hover_color=COLOR_TEXT_MUTED,
-            command=lambda: _resolve(False),
-        )
-        btn_cancel.pack(side="right", padx=(10, 0))
-
+        # Button order: Cancel (left, safe escape) | Eliminar (right, destructive).
+        # Pack Eliminar FIRST with side="right" so it sits at the rightmost edge;
+        # Cancel packed second with side="right" sits to its LEFT. This puts the
+        # destructive action where the user has to skip past Cancel to reach it,
+        # reducing the risk of muscle-memory clicks right after typing the name.
         btn_confirm = ctk.CTkButton(
             btn_row,
             text="Eliminar",
@@ -536,6 +532,15 @@ class AsesorView(ctk.CTkFrame):
         )
         btn_confirm.pack(side="right")
 
+        btn_cancel = ctk.CTkButton(
+            btn_row,
+            text="Cancelar",
+            fg_color=COLOR_BORDER,
+            hover_color=COLOR_TEXT_MUTED,
+            command=lambda: _resolve(False),
+        )
+        btn_cancel.pack(side="right", padx=(0, 10))
+
         def _on_entry_change(*_args: object) -> None:
             if entry.get() == folder_name:  # case-sensitive exact match
                 btn_confirm.configure(state="normal")
@@ -543,6 +548,9 @@ class AsesorView(ctk.CTkFrame):
                 btn_confirm.configure(state="disabled")
 
         entry.bind("<KeyRelease>", _on_entry_change)
+
+        # Esc -> cancel (keyboard escape route)
+        w.bind("<Escape>", lambda _e: _resolve(False))
 
         # Window close button (X) -> cancel
         w.protocol("WM_DELETE_WINDOW", lambda: _resolve(False))

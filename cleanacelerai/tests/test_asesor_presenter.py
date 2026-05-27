@@ -389,6 +389,70 @@ class TestDeleteItems:
 
         mock_sdd.assert_not_called()
 
+    def test_delete_items_dialog_cancelled_does_not_redialog(self) -> None:
+        """Regression: cancelling the project-confirm dialog must advance the
+        queue. Previously _cb only popped the queue on confirmed=True, so
+        cancel caused the SAME item to re-trigger the dialog forever — user
+        observed during smoke test of PR #35: clicking Cancel reopened the
+        dialog until they typed the name and clicked Eliminar to escape."""
+        presenter, view = self._make_presenter()
+
+        sig = ProjectSignature(
+            path=r"C:\Mis_proyectos\myapp",
+            signals=("inside-mis-proyectos",),
+            last_modified_days=1,
+        )
+
+        with (
+            patch("src.ui.presenters.asesor_presenter.safe_delete_dir") as mock_sdd,
+            patch("src.ui.presenters.asesor_presenter.detect_project_signature", return_value=sig),
+            patch("os.path.isdir", return_value=True),
+        ):
+            presenter.delete_items([("id1", r"C:\Mis_proyectos\myapp", "myapp")])
+            assert len(view.show_project_confirm_dialog_calls) == 1
+            _, on_confirm = view.show_project_confirm_dialog_calls[0]
+            on_confirm(False)
+
+            assert len(view.show_project_confirm_dialog_calls) == 1, (
+                f"Dialog re-opened after cancel — queue did not advance. "
+                f"Total dialog calls: {len(view.show_project_confirm_dialog_calls)}"
+            )
+
+        mock_sdd.assert_not_called()
+
+    def test_delete_items_cancel_then_next_item_processed(self) -> None:
+        """After cancel on a project item, the NEXT queued item must still
+        be processed. Verifies the queue keeps draining past the cancelled one."""
+        presenter, view = self._make_presenter()
+
+        sig = ProjectSignature(
+            path=r"C:\Mis_proyectos\myapp",
+            signals=("inside-mis-proyectos",),
+            last_modified_days=1,
+        )
+
+        def sig_lookup(path: str):
+            return sig if "myapp" in path else None
+
+        items = [
+            ("id1", r"C:\Mis_proyectos\myapp", "myapp"),
+            ("id2", r"C:\plain\folder", "folder"),
+        ]
+
+        with (
+            patch("src.ui.presenters.asesor_presenter.safe_delete_dir", return_value=(True, "")) as mock_sdd,
+            patch("src.ui.presenters.asesor_presenter.detect_project_signature", side_effect=sig_lookup),
+            patch("os.path.isdir", return_value=True),
+        ):
+            presenter.delete_items(items)
+            assert len(view.show_project_confirm_dialog_calls) == 1
+            _, on_confirm = view.show_project_confirm_dialog_calls[0]
+            on_confirm(False)
+
+        mock_sdd.assert_called_once()
+        called_path = mock_sdd.call_args[0][0]
+        assert "folder" in called_path
+
     def test_delete_items_source_is_orden_general(self) -> None:
         """safe_delete_dir must be called with source='asesor.orden-general'."""
         presenter, view = self._make_presenter()
