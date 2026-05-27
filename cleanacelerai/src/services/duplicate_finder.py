@@ -41,6 +41,10 @@ def find_duplicates(
     protected_keywords: list[str] | None = None,
     on_progress: Callable[[str], None] | None = None,
     should_continue: Callable[[], bool] | None = None,
+    *,
+    blocked_paths: tuple[str, ...] | None = None,
+    allowed_extensions: tuple[str, ...] | None = None,
+    min_size_bytes: int = 1024,
 ) -> list[DuplicateGroup]:
     """
     Find duplicate files across the given paths.
@@ -55,6 +59,13 @@ def find_duplicates(
         protected_keywords: Keywords — folders containing these are skipped.
         on_progress: Optional callback for status messages.
         should_continue: Callable returning False to cancel mid-scan.
+        blocked_paths: Override for directory-level blocklist. Defaults to
+            PATHS_BLOQUEADOS_SCAN (full union). Resolved at call time so
+            unittest.mock.patch on the module-level constant still works.
+        allowed_extensions: Tuple of lowercase extensions to accept (e.g.
+            EXTENSIONES_ASSETS_BINARIOS). None means no extension filter.
+            Applied BEFORE os.path.getsize for safety + performance.
+        min_size_bytes: Files <= this size are skipped. Default 1024 (1 KB).
 
     Returns:
         List of DuplicateGroup, each with 2+ identical files.
@@ -63,6 +74,8 @@ def find_duplicates(
         protected_keywords = []
     if should_continue is None:
         should_continue = lambda: True
+    if blocked_paths is None:
+        blocked_paths = PATHS_BLOQUEADOS_SCAN
 
     def log(msg: str) -> None:
         if on_progress:
@@ -90,7 +103,7 @@ def find_duplicates(
             # Trailing sep makes blocklist entries like '\Mis_proyectos\' also
             # match a root that is exactly the blocked folder ('D:\Mis_proyectos').
             root_norm = os.path.normpath(root).lower() + os.sep
-            if any(blocked.lower() in root_norm for blocked in PATHS_BLOQUEADOS_SCAN):
+            if any(blocked.lower() in root_norm for blocked in blocked_paths):
                 dirs.clear()
                 continue
 
@@ -109,10 +122,15 @@ def find_duplicates(
                 if file.lower().endswith(EXTENSIONES_SISTEMA):
                     continue
 
+                # Extension whitelist gate — runs BEFORE getsize (safety + perf).
+                # None means no filter (default behavior, no extension rejected).
+                if allowed_extensions is not None and not file.lower().endswith(allowed_extensions):
+                    continue
+
                 filepath = os.path.join(root, file)
                 try:
                     size = os.path.getsize(filepath)
-                    if size > 1024:  # Ignore files < 1 KB
+                    if size > min_size_bytes:
                         archivos_por_tamano[size].append(filepath)
                     procesados += 1
                     if procesados % 100 == 0:

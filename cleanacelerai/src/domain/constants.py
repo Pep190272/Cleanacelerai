@@ -48,18 +48,45 @@ ARCHIVOS_PROHIBIDOS: set[str] = {
     'pagefile.sys', 'hiberfil.sys', 'swapfile.sys', 'dumpstack.log',
 }
 
-# Folders that must never be scanned for deletion — contain project/dev code
-PATHS_BLOQUEADOS_SCAN: tuple[str, ...] = (
-    '\\Local Sites\\',
-    '\\Mis_proyectos\\',
-    '\\AppData\\Roaming\\Local\\',
+# Always-blocked tech paths — never reachable in any mode.
+# Includes \\AppData\\ (broadened from the buggy \\AppData\\Roaming\\Local\\ entry).
+PATHS_BLOQUEADOS_SCAN_TECH: tuple[str, ...] = (
     '\\.git\\',
     '\\node_modules\\',
     '\\venv\\',
     '\\.venv\\',
     '\\dist\\',
     '\\build\\',
+    '\\AppData\\',
 )
+
+# Project-content paths — blocked in normal mode, UNLOCKED in binary-assets mode.
+PATHS_BLOQUEADOS_SCAN_PROJECTS: tuple[str, ...] = (
+    '\\Local Sites\\',
+    '\\Mis_proyectos\\',
+)
+
+# Backward-compat alias. Existing callers (find_duplicates default,
+# DuplicatesPresenter.is_path_blocked normal mode, tests that patch the constant)
+# keep working WITHOUT changes because the union is identical in semantics.
+PATHS_BLOQUEADOS_SCAN: tuple[str, ...] = (
+    PATHS_BLOQUEADOS_SCAN_TECH + PATHS_BLOQUEADOS_SCAN_PROJECTS
+)
+
+# Whitelist applied at os.walk file level when binary-assets mode is active.
+# Lowercase ASCII extensions; matched via str.lower().endswith(tuple).
+EXTENSIONES_ASSETS_BINARIOS: tuple[str, ...] = (
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tiff', '.svg',
+    '.pdf',
+    '.mp4', '.mov', '.avi', '.mkv', '.webm',
+    '.mp3', '.wav', '.ogg', '.flac', '.m4a',
+    '.zip', '.rar', '.7z', '.iso', '.tar', '.gz',
+    '.psd', '.ai', '.sketch', '.fig', '.xd',
+)
+
+# Minimum file size floor used in binary-assets mode (50 KB).
+# Normal mode keeps the existing 1024 byte floor (passed as default kwarg).
+BINARY_MODE_SIZE_FLOOR_BYTES: int = 51_200
 
 # --- Intelligent Chaos Advisor ---
 from pathlib import Path

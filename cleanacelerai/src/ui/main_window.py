@@ -41,11 +41,12 @@ class MainWindow(ctk.CTk):
 
         # Config persistence
         self._config_service = ConfigService()
-        _defaults = {
+        self._config_defaults = {
             "keywords": sorted(DOTFILES_CRITICOS),
             "folders": [],
+            "binary_assets_mode_enabled": False,
         }
-        self._config = self._config_service.load(_defaults)
+        self._config = self._config_service.load(self._config_defaults)
 
         # State for cross-callback coordination
         self._last_basura_count: int = 0
@@ -156,7 +157,10 @@ class MainWindow(ctk.CTk):
 
         self._dashboard_view = DashboardView(self._content)
         self._basura_view = BasuraView(self._content)
-        self._duplicates_view = DuplicatesView(self._content)
+        self._duplicates_view = DuplicatesView(
+            self._content,
+            initial_binary_mode=self._config.get("binary_assets_mode_enabled", False),
+        )
         self._asesor_view = AsesorView(self._content)
         self._marcadores_view = MarcadorView(self._content)
         self._renombrado_view = RenombradoView(self._content)
@@ -186,7 +190,11 @@ class MainWindow(ctk.CTk):
         self._basura_view.set_presenter(self._basura_presenter)
 
         # Duplicates
-        self._duplicates_presenter = DuplicatesPresenter(self._duplicates_view)
+        self._duplicates_presenter = DuplicatesPresenter(
+            self._duplicates_view,
+            config_service=self._config_service,
+            initial_binary_mode=self._config.get("binary_assets_mode_enabled", False),
+        )
         self._duplicates_presenter.set_protection(
             keywords=self._reglas_view.get_keywords(),
             folders=self._reglas_view.get_protected_folders(),
@@ -233,11 +241,16 @@ class MainWindow(ctk.CTk):
         # Update header title
         self._lbl_titulo.configure(text=self._TITULOS.get(nombre, nombre))
 
-        # Refresh presenter protection before switching to duplicados
+        # Refresh presenter protection and binary mode sync before switching to duplicados
         if nombre == "duplicados":
+            # Re-load config from disk so the tab always reflects on-disk state (Risk R6).
+            self._config = self._config_service.load(self._config_defaults)
             self._duplicates_presenter.set_protection(
                 keywords=self._reglas_view.get_keywords(),
                 folders=self._reglas_view.get_protected_folders(),
+            )
+            self._duplicates_view.sync_binary_mode_from_config(
+                self._config.get("binary_assets_mode_enabled", False),
             )
 
         # Show selected frame

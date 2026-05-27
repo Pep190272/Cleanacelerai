@@ -3,7 +3,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.domain.constants import PATHS_BLOQUEADOS_SCAN
+from src.domain.constants import (
+    BINARY_MODE_SIZE_FLOOR_BYTES,
+    EXTENSIONES_ASSETS_BINARIOS,
+    PATHS_BLOQUEADOS_SCAN,
+    PATHS_BLOQUEADOS_SCAN_PROJECTS,
+    PATHS_BLOQUEADOS_SCAN_TECH,
+)
 from src.ui.presenters.duplicates_presenter import DuplicatesPresenter
 
 
@@ -102,3 +108,96 @@ class TestPresenterIsPathBlocked:
     def test_venv_parent_exact_is_blocked(self) -> None:
         p = make_presenter()
         assert p.is_path_blocked(r"D:\projects\myapp\venv")
+
+
+class TestBlocklistSplit:
+    """Verify PATHS_BLOQUEADOS_SCAN_TECH + PATHS_BLOQUEADOS_SCAN_PROJECTS split."""
+
+    def test_alias_equals_union(self) -> None:
+        assert PATHS_BLOQUEADOS_SCAN == PATHS_BLOQUEADOS_SCAN_TECH + PATHS_BLOQUEADOS_SCAN_PROJECTS
+
+    def test_appdata_broad_in_tech(self) -> None:
+        assert "\\AppData\\" in PATHS_BLOQUEADOS_SCAN_TECH
+
+    def test_appdata_roaming_local_absent_from_tech(self) -> None:
+        assert "\\AppData\\Roaming\\Local\\" not in PATHS_BLOQUEADOS_SCAN_TECH
+
+    def test_appdata_roaming_local_absent_from_projects(self) -> None:
+        assert "\\AppData\\Roaming\\Local\\" not in PATHS_BLOQUEADOS_SCAN_PROJECTS
+
+    def test_appdata_roaming_local_absent_from_alias(self) -> None:
+        assert "\\AppData\\Roaming\\Local\\" not in PATHS_BLOQUEADOS_SCAN
+
+    def test_mis_proyectos_in_projects(self) -> None:
+        assert "\\Mis_proyectos\\" in PATHS_BLOQUEADOS_SCAN_PROJECTS
+
+    def test_local_sites_in_projects(self) -> None:
+        assert "\\Local Sites\\" in PATHS_BLOQUEADOS_SCAN_PROJECTS
+
+    def test_node_modules_in_tech(self) -> None:
+        assert "\\node_modules\\" in PATHS_BLOQUEADOS_SCAN_TECH
+
+    def test_legacy_alias_still_has_9_entries(self) -> None:
+        assert len(PATHS_BLOQUEADOS_SCAN) == 9
+
+
+class TestExtensionWhitelistConstant:
+    """Verify EXTENSIONES_ASSETS_BINARIOS contains expected and excludes forbidden."""
+
+    def test_whitelist_contains_png(self) -> None:
+        assert ".png" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_jpg(self) -> None:
+        assert ".jpg" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_jpeg(self) -> None:
+        assert ".jpeg" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_gif(self) -> None:
+        assert ".gif" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_webp(self) -> None:
+        assert ".webp" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_pdf(self) -> None:
+        assert ".pdf" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_mp4(self) -> None:
+        assert ".mp4" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_mov(self) -> None:
+        assert ".mov" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_mp3(self) -> None:
+        assert ".mp3" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_zip(self) -> None:
+        assert ".zip" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_psd(self) -> None:
+        assert ".psd" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_contains_fig(self) -> None:
+        assert ".fig" in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_excludes_py(self) -> None:
+        assert ".py" not in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_excludes_js(self) -> None:
+        assert ".js" not in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_excludes_php(self) -> None:
+        assert ".php" not in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_excludes_json(self) -> None:
+        assert ".json" not in EXTENSIONES_ASSETS_BINARIOS
+
+    def test_whitelist_excludes_md(self) -> None:
+        assert ".md" not in EXTENSIONES_ASSETS_BINARIOS
+
+
+class TestBinaryModeSizeFloor:
+    """Verify BINARY_MODE_SIZE_FLOOR_BYTES constant."""
+
+    def test_size_floor_value(self) -> None:
+        assert BINARY_MODE_SIZE_FLOOR_BYTES == 51_200

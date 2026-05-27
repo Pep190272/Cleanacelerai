@@ -27,27 +27,55 @@ if TYPE_CHECKING:
 class DuplicatesView(ctk.CTkFrame):
     """View for the duplicate-file finder module."""
 
-    def __init__(self, parent: ctk.CTkFrame) -> None:
+    def __init__(
+        self,
+        parent: ctk.CTkFrame,
+        initial_binary_mode: bool = False,
+    ) -> None:
         super().__init__(parent, fg_color="transparent")
-        self.grid_rowconfigure(2, weight=1)
+        # Row layout: 0=banner (binary mode only), 1=explanation, 2=controls, 3=results
+        self.grid_rowconfigure(3, weight=1)
         self.grid_columnconfigure(0, weight=1)
 
         self._presenter: DuplicatesPresenter | None = None
         self._rutas_analisis: list[str] = []
+        self._binary_mode_var = ctk.BooleanVar(value=initial_binary_mode)
 
-        self._build_explanation()
-        self._build_controls()
-        self._build_results()
+        self._build_banner_binary_mode()   # row 0 (hidden until mode ON)
+        self._build_explanation()          # row 1
+        self._build_controls()             # row 2 (checkbox added above paths list)
+        self._build_results()              # row 3
         self._build_context_menu()
+        self._refresh_binary_mode_visuals()
 
     def set_presenter(self, presenter: "DuplicatesPresenter") -> None:
         self._presenter = presenter
 
     # ── UI Construction ────────────────────────────────────────────────────
+    def _build_banner_binary_mode(self) -> None:
+        """Amber warning banner shown at top when binary assets mode is active."""
+        self._banner_binary_mode = ctk.CTkFrame(
+            self,
+            fg_color=COLOR_WARNING,
+            corner_radius=8,
+        )
+        # Row 0; initially hidden — shown by _refresh_binary_mode_visuals
+        self._banner_binary_mode.grid(row=0, column=0, padx=10, pady=(10, 0), sticky="ew")
+        ctk.CTkLabel(
+            self._banner_binary_mode,
+            text=(
+                "⚠️ MODO ASSETS BINARIOS ACTIVO — escanea carpetas de proyectos "
+                "solo para imágenes, vídeos, PDFs y archivos de diseño"
+            ),
+            text_color="#000000",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).pack(padx=20, pady=8)
+        self._banner_binary_mode.grid_remove()  # hidden by default
+
     def _build_explanation(self) -> None:
         marco = ctk.CTkFrame(self, fg_color=COLOR_CARD, corner_radius=12,
                              border_width=1, border_color=COLOR_BORDER)
-        marco.grid(row=0, column=0, padx=10, pady=(0, 20), sticky="ew")
+        marco.grid(row=1, column=0, padx=10, pady=(0, 20), sticky="ew")
         ctk.CTkLabel(marco, text="💡 EXPLICACIÓN CLARA:",
                      font=ctk.CTkFont(weight="bold"), text_color=COLOR_ACCENT,
                      ).pack(anchor="w", padx=20, pady=(15, 5))
@@ -65,7 +93,22 @@ class DuplicatesView(ctk.CTkFrame):
     def _build_controls(self) -> None:
         tarjeta = ctk.CTkFrame(self, fg_color=COLOR_CARD, corner_radius=12,
                                border_width=1, border_color=COLOR_BORDER)
-        tarjeta.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="ew")
+        tarjeta.grid(row=2, column=0, padx=10, pady=(0, 10), sticky="ew")
+
+        # Binary mode checkbox — above the paths list
+        marco_modo = ctk.CTkFrame(tarjeta, fg_color="transparent")
+        marco_modo.pack(fill="x", padx=20, pady=(15, 0))
+        self._chk_binary_mode = ctk.CTkCheckBox(
+            marco_modo,
+            text=(
+                "Modo Assets Binarios (escanear \\Mis_proyectos y \\Local Sites "
+                "solo en busca de imágenes/vídeos/PDFs)"
+            ),
+            variable=self._binary_mode_var,
+            command=self._on_toggle_binary_mode,
+            text_color=COLOR_TEXT_MAIN,
+        )
+        self._chk_binary_mode.pack(side="left")
 
         marco_rutas = ctk.CTkFrame(tarjeta, fg_color="transparent")
         marco_rutas.pack(fill="x", padx=20, pady=15)
@@ -102,17 +145,21 @@ class DuplicatesView(ctk.CTkFrame):
     def _build_results(self) -> None:
         tarjeta = ctk.CTkFrame(self, fg_color=COLOR_CARD, corner_radius=12,
                                border_width=1, border_color=COLOR_BORDER)
-        tarjeta.grid(row=2, column=0, padx=10, pady=(10, 0), sticky="nsew")
+        tarjeta.grid(row=3, column=0, padx=10, pady=(10, 0), sticky="nsew")
         tarjeta.grid_rowconfigure(1, weight=1)
         tarjeta.grid_columnconfigure(0, weight=1)
 
         marco_acciones = ctk.CTkFrame(tarjeta, fg_color="transparent")
         marco_acciones.grid(row=0, column=0, sticky="ew", padx=20, pady=15)
-        ctk.CTkButton(marco_acciones,
-                      text="✨ Auto-Seleccionar (Mantenimiento Inteligente)",
-                      command=self._on_auto_select,
-                      fg_color=COLOR_ACCENT, font=ctk.CTkFont(weight="bold"),
-                      ).pack(side="left")
+
+        self._btn_auto_select = ctk.CTkButton(
+            marco_acciones,
+            text="✨ Auto-Seleccionar (Mantenimiento Inteligente)",
+            command=self._on_auto_select,
+            fg_color=COLOR_ACCENT, font=ctk.CTkFont(weight="bold"),
+        )
+        self._btn_auto_select.pack(side="left")
+
         ctk.CTkButton(marco_acciones, text="🗑️ Eliminar Selección",
                       command=self._on_delete,
                       fg_color=COLOR_DANGER, font=ctk.CTkFont(weight="bold"),
@@ -167,6 +214,28 @@ class DuplicatesView(ctk.CTkFrame):
                                    command=self._on_open_location)
         self._tree.bind("<Button-3>", self._show_context_menu)
 
+    # ── Binary mode helpers ────────────────────────────────────────────────
+    def _on_toggle_binary_mode(self) -> None:
+        if self._presenter:
+            self._presenter.set_binary_mode(self._binary_mode_var.get())
+        self._refresh_binary_mode_visuals()
+
+    def _refresh_binary_mode_visuals(self) -> None:
+        """Re-sync every binary-mode-dependent widget. Called from __init__, toggle, and tab switch."""
+        on = self._binary_mode_var.get()
+        if on:
+            self._banner_binary_mode.grid()
+        else:
+            self._banner_binary_mode.grid_remove()
+        if self._presenter is not None:
+            allowed = self._presenter.is_auto_select_allowed()
+            self._btn_auto_select.configure(state="normal" if allowed else "disabled")
+
+    def sync_binary_mode_from_config(self, enabled: bool) -> None:
+        """Re-sync checkbox state from config (called by MainWindow on tab switch)."""
+        self._binary_mode_var.set(enabled)
+        self._refresh_binary_mode_visuals()
+
     # ── User event handlers ────────────────────────────────────────────────
     def _add_ruta(self) -> None:
         carpeta = filedialog.askdirectory()
@@ -185,8 +254,19 @@ class DuplicatesView(ctk.CTkFrame):
             self._lista_rutas.insert(tk.END, carpeta)
 
     def _on_start(self) -> None:
-        if self._presenter:
-            self._presenter.start_scan(self._rutas_analisis)
+        if not self._presenter:
+            return
+        if self._binary_mode_var.get():
+            confirmed = messagebox.askyesno(
+                "Modo Assets Binarios — Confirmación",
+                "Vas a escanear una carpeta de proyectos en MODO ASSETS BINARIOS.\n\n"
+                "Solo se buscarán imágenes, vídeos, PDFs y archivos de diseño "
+                "(> 50 KB). El código del proyecto está protegido por el filtro.\n\n"
+                "¿Confirmás que solo buscás assets?",
+            )
+            if not confirmed:
+                return
+        self._presenter.start_scan(self._rutas_analisis)
 
     def _on_cancel(self) -> None:
         if self._presenter:
@@ -206,10 +286,19 @@ class DuplicatesView(ctk.CTkFrame):
         seleccion = self._tree.selection()
         if not seleccion:
             return
-        if not messagebox.askyesno(
-            "Confirmar",
-            f"Vas a ELIMINAR PERMANENTEMENTE {len(seleccion)} archivos.\n¿Estás seguro?",
-        ):
+        if self._binary_mode_var.get():
+            msg = (
+                f"ATENCIÓN: estás eliminando {len(seleccion)} archivos detectados "
+                "en MODO ASSETS BINARIOS dentro de una carpeta de proyectos.\n\n"
+                "Verificá uno a uno antes de continuar. Esta acción es permanente.\n\n"
+                f"¿Eliminar {len(seleccion)} archivos?"
+            )
+        else:
+            msg = (
+                f"Vas a ELIMINAR PERMANENTEMENTE {len(seleccion)} archivos.\n"
+                "¿Estás seguro?"
+            )
+        if not messagebox.askyesno("Confirmar", msg):
             return
         if self._presenter:
             self._presenter.delete_selected()
