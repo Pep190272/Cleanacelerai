@@ -27,3 +27,11 @@ cleanacelerai.py
 
 # PyInstaller
 *.exe
+
+# .atl scratch area: auto-generated skill registry and one-off working files
+# (env tooling, not project source). Deny by default — a new file here stays
+# ignored unless deliberately un-ignored with "!.atl/<file>".
+.atl/*
+
+# Local-only agent config
+.claude/
