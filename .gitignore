@@ -35,3 +35,4 @@ cleanacelerai.py
 
 # Local-only agent config
 .claude/
+.gga
